@@ -1,10 +1,33 @@
 import type { Command } from "commander";
+import { readConfig } from "../lib/config";
+import { GitPlumbing } from "../lib/git";
+import { findRepoRoot } from "../lib/paths";
+
+export async function listPlans(path?: string, cwd?: string): Promise<string[]> {
+  const repoRoot = await findRepoRoot(cwd);
+  const config = await readConfig(repoRoot);
+  const git = new GitPlumbing(repoRoot, config.branch);
+
+  if (!(await git.branchExists())) {
+    throw new Error(`No plans branch found. Run "plan init" first.`);
+  }
+
+  return git.listFiles(path);
+}
 
 export function registerLs(program: Command): void {
   program
-    .command("ls")
+    .command("ls [path]")
     .description("List stored plans")
-    .action(() => {
-      console.log("not implemented yet");
+    .action(async (path?: string) => {
+      try {
+        const files = await listPlans(path);
+        for (const file of files) {
+          console.log(file);
+        }
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+      }
     });
 }
