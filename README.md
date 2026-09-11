@@ -1,0 +1,15 @@
+# plan-storage.agent-ad28f957493fd98e9
+
+To install dependencies:
+
+```bash
+bun install
+```
+
+To run:
+
+```bash
+bun run index.ts
+```
+
+This project was created using `bun init` in bun v1.4.1. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
