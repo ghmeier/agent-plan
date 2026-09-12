@@ -5,7 +5,7 @@ import { findRepoRoot } from "../lib/paths";
 
 export async function showPlan(
   path: string,
-  options: { version?: string },
+  options: { version?: string; json?: boolean },
   cwd?: string,
 ): Promise<string> {
   const repoRoot = await findRepoRoot(cwd);
@@ -16,14 +16,20 @@ export async function showPlan(
     throw new Error(`No plans branch found. Run "plan init" first.`);
   }
 
+  let content: string;
   try {
-    if (options.version) {
-      return await git.exec(["show", `${options.version}:${path}`]);
-    }
-    return await git.readFile(path);
+    content = options.version
+      ? await git.exec(["show", `${options.version}:${path}`])
+      : await git.readFile(path);
   } catch {
     throw new Error(`Plan file not found: ${path}`);
   }
+
+  if (options.json) {
+    console.log(JSON.stringify({ path, content }));
+  }
+
+  return content;
 }
 
 export function registerShow(program: Command): void {
@@ -31,10 +37,13 @@ export function registerShow(program: Command): void {
     .command("show <path>")
     .description("Show the contents of a stored plan")
     .option("--version <ref>", "Show a historical version by commit hash")
-    .action(async (path: string, options: { version?: string }) => {
+    .option("--json", "Output in JSON format")
+    .action(async (path: string, options: { version?: string; json?: boolean }) => {
       try {
         const content = await showPlan(path, options);
-        process.stdout.write(content);
+        if (!options.json) {
+          process.stdout.write(content);
+        }
       } catch (error) {
         console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;
