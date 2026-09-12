@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig, writeConfig } from "../lib/config";
 import { GitPlumbing } from "../lib/git";
+import { installAutoCommitHook, removeAutoCommitHook } from "../lib/hooks";
 import { findRepoRoot } from "../lib/paths";
 import { DEFAULT_CONFIG } from "../types";
 
@@ -29,7 +30,7 @@ async function ensureGitignoreEntry(repoRoot: string): Promise<void> {
 }
 
 export async function initPlans(
-  options: { branch?: string; cwd?: string } = {},
+  options: { branch?: string; cwd?: string; autoCommit?: boolean } = {},
 ): Promise<void> {
   const repoRoot = await findRepoRoot(options.cwd);
 
@@ -46,6 +47,12 @@ export async function initPlans(
   await writeConfig(repoRoot, { ...existingConfig, branch });
   await ensureGitignoreEntry(repoRoot);
 
+  if (options.autoCommit === true) {
+    await installAutoCommitHook(repoRoot);
+  } else if (options.autoCommit === false) {
+    await removeAutoCommitHook(repoRoot);
+  }
+
   if (alreadyExisted) {
     console.log(`Plan storage already initialized (branch '${branch}' exists)`);
   } else {
@@ -58,6 +65,7 @@ export function registerInit(program: Command): void {
     .command("init")
     .description("Initialize plan storage in the current repository")
     .option("--branch <name>", "Branch name for plan storage", "plans")
+    .option("--auto-commit", "Install a post-commit hook that auto-commits plan changes")
     .action(async (opts) => {
       try {
         await initPlans(opts);
