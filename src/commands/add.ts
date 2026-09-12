@@ -1,7 +1,9 @@
 import path from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
+import { FileNotFoundError, NotInitializedError } from "../lib/errors";
 import { GitPlumbing } from "../lib/git";
+import { success } from "../lib/output";
 import { findRepoRoot, resolvePlanPath } from "../lib/paths";
 
 export interface AddOptions {
@@ -21,7 +23,7 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
   const git = new GitPlumbing(repoRoot, config.branch);
 
   if (!(await git.branchExists())) {
-    throw new Error(`Plans branch '${config.branch}' does not exist. Run 'plan init' first.`);
+    throw new NotInitializedError();
   }
 
   const resolved: { path: string; content: string }[] = [];
@@ -31,7 +33,7 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
     const diskFile = Bun.file(absolutePath);
 
     if (!(await diskFile.exists())) {
-      throw new Error(`File not found: ${file}`);
+      throw new FileNotFoundError(file);
     }
 
     const content = await diskFile.text();
@@ -43,7 +45,7 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
 
   await git.writeFiles(resolved, message);
 
-  console.log(`Added ${resolved.length} file(s) to plans`);
+  success(`Added ${resolved.length} file(s) to plans`);
   for (const file of resolved) {
     console.log(`  ${file.path}`);
   }
@@ -57,11 +59,6 @@ export function registerAdd(program: Command): void {
     .argument("[files...]", "additional files to add")
     .option("-m, --message <msg>", "custom commit message")
     .action(async (file: string, files: string[], options: { message?: string }) => {
-      try {
-        await addPlans([file, ...files], { message: options.message });
-      } catch (error) {
-        console.error(error instanceof Error ? error.message : String(error));
-        process.exitCode = 1;
-      }
+      await addPlans([file, ...files], { message: options.message });
     });
 }

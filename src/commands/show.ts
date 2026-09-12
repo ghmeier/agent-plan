@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
+import { FileNotFoundError, NotInitializedError } from "../lib/errors";
 import { GitPlumbing } from "../lib/git";
 import { findRepoRoot } from "../lib/paths";
 
@@ -13,7 +14,7 @@ export async function showPlan(
   const git = new GitPlumbing(repoRoot, config.branch);
 
   if (!(await git.branchExists())) {
-    throw new Error(`No plans branch found. Run "plan init" first.`);
+    throw new NotInitializedError();
   }
 
   let content: string;
@@ -22,7 +23,7 @@ export async function showPlan(
       ? await git.exec(["show", `${options.version}:${path}`])
       : await git.readFile(path);
   } catch {
-    throw new Error(`Plan file not found: ${path}`);
+    throw new FileNotFoundError(path);
   }
 
   if (options.json) {
@@ -39,14 +40,9 @@ export function registerShow(program: Command): void {
     .option("--version <ref>", "Show a historical version by commit hash")
     .option("--json", "Output in JSON format")
     .action(async (path: string, options: { version?: string; json?: boolean }) => {
-      try {
-        const content = await showPlan(path, options);
-        if (!options.json) {
-          process.stdout.write(content);
-        }
-      } catch (error) {
-        console.error(error instanceof Error ? error.message : String(error));
-        process.exitCode = 1;
+      const content = await showPlan(path, options);
+      if (!options.json) {
+        process.stdout.write(content);
       }
     });
 }

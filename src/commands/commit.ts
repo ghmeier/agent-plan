@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
+import { info, success } from "../lib/output";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
 
 const PLACEHOLDER_MESSAGE =
@@ -24,7 +25,7 @@ export async function commitPlans(
   const config = await readConfig(repoRoot);
 
   if (!config.worktree) {
-    console.log(PLACEHOLDER_MESSAGE);
+    info(PLACEHOLDER_MESSAGE);
     return;
   }
 
@@ -34,14 +35,14 @@ export async function commitPlans(
 
   const { exitCode: diffExitCode } = await run(["diff", "--cached", "--quiet"], plansDir);
   if (diffExitCode === 0) {
-    console.log("Nothing to commit");
+    info("Nothing to commit");
     return;
   }
 
   const message = options.message ?? "Update plans";
   await run(["commit", "-m", message], plansDir);
 
-  console.log("Committed plan changes");
+  success("Committed plan changes");
 }
 
 export function registerCommit(program: Command): void {
@@ -50,12 +51,6 @@ export function registerCommit(program: Command): void {
     .description("Commit staged plan changes")
     .option("-m, --message <msg>", "Commit message")
     .action(async (opts) => {
-      try {
-        await commitPlans(opts);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`Failed to commit plan changes: ${message}`);
-        process.exit(1);
-      }
+      await commitPlans(opts);
     });
 }

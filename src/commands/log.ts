@@ -1,6 +1,8 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
+import { NotInitializedError } from "../lib/errors";
 import { GitPlumbing, type LogEntry } from "../lib/git";
+import { info } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 
 const DEFAULT_LIMIT = 20;
@@ -16,7 +18,7 @@ export async function getPlanLog(
   const git = new GitPlumbing(repoRoot, config.branch);
 
   if (!(await git.branchExists())) {
-    throw new Error(`No plans branch found. Run "plan init" first.`);
+    throw new NotInitializedError();
   }
 
   const entries = await git.getLog(file, limit);
@@ -39,17 +41,16 @@ export function registerLog(program: Command): void {
     .option("-n, --limit <number>", "Limit number of entries", String(DEFAULT_LIMIT))
     .option("--json", "Output in JSON format")
     .action(async (file: string | undefined, options: { limit: string; json?: boolean }) => {
-      try {
-        const limit = Number.parseInt(options.limit, 10);
-        const entries = await getPlanLog(file, limit, undefined, options);
-        if (!options.json) {
+      const limit = Number.parseInt(options.limit, 10);
+      const entries = await getPlanLog(file, limit, undefined, options);
+      if (!options.json) {
+        if (entries.length === 0) {
+          info("No history found");
+        } else {
           for (const entry of entries) {
             console.log(formatLogEntry(entry));
           }
         }
-      } catch (error) {
-        console.error(error instanceof Error ? error.message : String(error));
-        process.exitCode = 1;
       }
     });
 }

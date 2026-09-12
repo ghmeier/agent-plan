@@ -1,6 +1,8 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
+import { NotInitializedError } from "../lib/errors";
 import { GitPlumbing } from "../lib/git";
+import { info } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 
 export async function listPlans(
@@ -13,7 +15,7 @@ export async function listPlans(
   const git = new GitPlumbing(repoRoot, config.branch);
 
   if (!(await git.branchExists())) {
-    throw new Error(`No plans branch found. Run "plan init" first.`);
+    throw new NotInitializedError();
   }
 
   const files = await git.listFiles(path);
@@ -31,16 +33,15 @@ export function registerLs(program: Command): void {
     .description("List stored plans")
     .option("--json", "Output in JSON format")
     .action(async (path: string | undefined, options: { json?: boolean }) => {
-      try {
-        const files = await listPlans(path, undefined, options);
-        if (!options.json) {
+      const files = await listPlans(path, undefined, options);
+      if (!options.json) {
+        if (files.length === 0) {
+          info("No files found");
+        } else {
           for (const file of files) {
             console.log(file);
           }
         }
-      } catch (error) {
-        console.error(error instanceof Error ? error.message : String(error));
-        process.exitCode = 1;
       }
     });
 }

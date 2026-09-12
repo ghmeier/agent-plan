@@ -1,6 +1,8 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
+import { NotInitializedError } from "../lib/errors";
 import { GitPlumbing } from "../lib/git";
+import { error as logError, info, success, warn } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 
 export interface SyncOptions {
@@ -20,13 +22,13 @@ export async function syncPlans(options: SyncOptions = {}): Promise<void> {
   const git = new GitPlumbing(repoRoot, config.branch);
 
   if (!(await git.branchExists())) {
-    throw new Error(`Plans branch '${config.branch}' does not exist. Run 'plan init' first.`);
+    throw new NotInitializedError();
   }
 
   try {
     await git.exec(["remote", "get-url", config.remote]);
   } catch {
-    console.log("No remote configured, skipping sync");
+    info("No remote configured, skipping sync");
     return;
   }
 
@@ -50,17 +52,17 @@ export async function syncPlans(options: SyncOptions = {}): Promise<void> {
     if (isAncestor) {
       await git.exec(["update-ref", `refs/heads/${config.branch}`, remoteRef]);
     } else {
-      console.warn("Local plans have diverged from remote, push may fail");
+      warn("Local plans have diverged from remote, push may fail");
     }
   }
 
   try {
     await git.exec(["push", config.remote, config.branch]);
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
+  } catch (err) {
+    logError(err instanceof Error ? err.message : String(err));
   }
 
-  console.log(`Synced plans with ${config.remote}`);
+  success(`Synced plans with ${config.remote}`);
 }
 
 export function registerSync(program: Command): void {
@@ -68,11 +70,6 @@ export function registerSync(program: Command): void {
     .command("sync")
     .description("Sync plan storage with the remote")
     .action(async () => {
-      try {
-        await syncPlans();
-      } catch (error) {
-        console.error(error instanceof Error ? error.message : String(error));
-        process.exitCode = 1;
-      }
+      await syncPlans();
     });
 }

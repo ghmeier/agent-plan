@@ -2,8 +2,10 @@ import { readFile, writeFile, rm, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig, writeConfig } from "../lib/config";
+import { NotARepoError } from "../lib/errors";
 import { GitPlumbing } from "../lib/git";
 import { installAutoCommitHook, removeAutoCommitHook } from "../lib/hooks";
+import { success } from "../lib/output";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
 import { DEFAULT_CONFIG } from "../types";
 
@@ -79,7 +81,12 @@ async function removeWorktree(repoRoot: string, plansDir: string): Promise<void>
 export async function initPlans(
   options: { branch?: string; cwd?: string; worktree?: boolean; autoCommit?: boolean } = {},
 ): Promise<void> {
-  const repoRoot = await findRepoRoot(options.cwd);
+  let repoRoot: string;
+  try {
+    repoRoot = await findRepoRoot(options.cwd);
+  } catch {
+    throw new NotARepoError();
+  }
 
   const existingConfig = await readConfig(repoRoot);
   const branch = options.branch ?? existingConfig.branch ?? DEFAULT_CONFIG.branch;
@@ -110,9 +117,9 @@ export async function initPlans(
   }
 
   if (alreadyExisted) {
-    console.log(`Plan storage already initialized (branch '${branch}' exists)`);
+    success(`Plan storage already initialized (branch '${branch}' exists)`);
   } else {
-    console.log(`Initialized plan storage on branch '${branch}'`);
+    success(`Initialized plan storage on branch '${branch}'`);
   }
 }
 
@@ -125,12 +132,6 @@ export function registerInit(program: Command): void {
     .option("--no-worktree", "Tear down the .plans/ worktree if one exists")
     .option("--auto-commit", "Install a post-commit hook that auto-commits plan changes")
     .action(async (opts) => {
-      try {
-        await initPlans(opts);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`Failed to initialize plan storage: ${message}`);
-        process.exit(1);
-      }
+      await initPlans(opts);
     });
 }
