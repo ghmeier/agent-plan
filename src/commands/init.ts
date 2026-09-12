@@ -1,10 +1,10 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, rm, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig, writeConfig } from "../lib/config";
 import { GitPlumbing } from "../lib/git";
 import { installAutoCommitHook, removeAutoCommitHook } from "../lib/hooks";
-import { findRepoRoot } from "../lib/paths";
+import { findRepoRoot, getPlansDir } from "../lib/paths";
 import { DEFAULT_CONFIG } from "../types";
 
 async function ensureGitignoreEntry(repoRoot: string): Promise<void> {
@@ -29,13 +29,61 @@ async function ensureGitignoreEntry(repoRoot: string): Promise<void> {
   await writeFile(gitignorePath, `${contents}${prefix}.plans/\n`);
 }
 
+async function realpathSafe(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch {
+    return path;
+  }
+}
+
+async function isWorktree(repoRoot: string, plansDir: string): Promise<boolean> {
+  const git = new GitPlumbing(repoRoot);
+  const output = await git.exec(["worktree", "list", "--porcelain"]);
+  const resolvedPlansDir = await realpathSafe(plansDir);
+
+  const worktreePaths = await Promise.all(
+    output
+      .split("\n")
+      .filter((line) => line.startsWith("worktree "))
+      .map((line) => realpathSafe(line.slice("worktree ".length))),
+  );
+
+  return worktreePaths.includes(resolvedPlansDir);
+}
+
+async function addWorktree(repoRoot: string, plansDir: string, branch: string): Promise<void> {
+  const git = new GitPlumbing(repoRoot);
+
+  if (await isWorktree(repoRoot, plansDir)) {
+    return;
+  }
+
+  // .plans/ may already exist as a plain directory (e.g. holding config.json);
+  // it needs to be gone before `git worktree add` can claim the path.
+  await rm(plansDir, { recursive: true, force: true });
+
+  await git.exec(["worktree", "add", plansDir, branch]);
+}
+
+async function removeWorktree(repoRoot: string, plansDir: string): Promise<void> {
+  const git = new GitPlumbing(repoRoot);
+
+  if (!(await isWorktree(repoRoot, plansDir))) {
+    return;
+  }
+
+  await git.exec(["worktree", "remove", "--force", plansDir]);
+}
+
 export async function initPlans(
-  options: { branch?: string; cwd?: string; autoCommit?: boolean } = {},
+  options: { branch?: string; cwd?: string; worktree?: boolean; autoCommit?: boolean } = {},
 ): Promise<void> {
   const repoRoot = await findRepoRoot(options.cwd);
 
   const existingConfig = await readConfig(repoRoot);
   const branch = options.branch ?? existingConfig.branch ?? DEFAULT_CONFIG.branch;
+  const plansDir = getPlansDir(repoRoot);
 
   const git = new GitPlumbing(repoRoot, branch);
   const alreadyExisted = await git.branchExists();
@@ -44,7 +92,15 @@ export async function initPlans(
     await git.createOrphanBranch();
   }
 
-  await writeConfig(repoRoot, { ...existingConfig, branch });
+  const wantsWorktree = options.worktree ?? existingConfig.worktree;
+
+  if (wantsWorktree) {
+    await addWorktree(repoRoot, plansDir, branch);
+  } else if (existingConfig.worktree) {
+    await removeWorktree(repoRoot, plansDir);
+  }
+
+  await writeConfig(repoRoot, { ...existingConfig, branch, worktree: wantsWorktree });
   await ensureGitignoreEntry(repoRoot);
 
   if (options.autoCommit === true) {
@@ -65,6 +121,8 @@ export function registerInit(program: Command): void {
     .command("init")
     .description("Initialize plan storage in the current repository")
     .option("--branch <name>", "Branch name for plan storage", "plans")
+    .option("--worktree", "Check out .plans/ as a git worktree for direct file access")
+    .option("--no-worktree", "Tear down the .plans/ worktree if one exists")
     .option("--auto-commit", "Install a post-commit hook that auto-commits plan changes")
     .action(async (opts) => {
       try {
