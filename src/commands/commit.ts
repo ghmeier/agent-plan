@@ -1,5 +1,7 @@
+import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
+import { stampTimestamps } from "../lib/frontmatter";
 import { info, success } from "../lib/output";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
 
@@ -7,15 +9,41 @@ const PLACEHOLDER_MESSAGE =
   "Nothing to commit. Use 'apl add <file>' to add files to plans.\n" +
   "In worktree mode, 'apl commit' commits all changes in .plans/";
 
-async function run(args: string[], cwd: string): Promise<{ exitCode: number }> {
+async function run(args: string[], cwd: string): Promise<{ exitCode: number; stdout?: string }> {
   const proc = Bun.spawn(["git", ...args], {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
   });
 
-  const exitCode = await proc.exited;
-  return { exitCode };
+  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  return { exitCode, stdout };
+}
+
+/**
+ * For each modified markdown file in the plans worktree that already has
+ * frontmatter, rewrite the file with an updated `updated` timestamp so
+ * agents that edit files directly still get timestamp tracking.
+ */
+async function stampChangedFiles(plansDir: string): Promise<void> {
+  const { stdout } = await run(["status", "--porcelain"], plansDir);
+  const lines = (stdout ?? "").split("\n").filter((l) => l.length > 0);
+
+  for (const line of lines) {
+    // Columns 0-1 are the XY status; column 2 is a space; path follows.
+    const filePath = line.slice(3).trim();
+    if (!filePath.endsWith(".md")) continue;
+
+    const fullPath = join(plansDir, filePath);
+    const file = Bun.file(fullPath);
+    if (!(await file.exists())) continue;
+
+    const raw = await file.text();
+    const stamped = stampTimestamps(raw);
+    if (stamped !== raw) {
+      await Bun.write(fullPath, stamped);
+    }
+  }
 }
 
 export async function commitPlans(options: { message?: string; cwd?: string } = {}): Promise<void> {
@@ -28,6 +56,8 @@ export async function commitPlans(options: { message?: string; cwd?: string } = 
   }
 
   const plansDir = getPlansDir(repoRoot);
+
+  await stampChangedFiles(plansDir);
 
   await run(["add", "-A"], plansDir);
 

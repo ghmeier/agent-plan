@@ -50,13 +50,15 @@ describe("--json output", () => {
     expect(parsed.content).toBe("# Plan\n");
   });
 
-  test("ls --json returns valid JSON with files array", async () => {
+  test("ls --json returns valid JSON with files array of entries including meta", async () => {
     const output = await captureStdout(async () => {
       await listPlans(undefined, repo.dir, { json: true });
     });
 
     const parsed = JSON.parse(output);
-    expect(parsed.files).toEqual(["plan.md"]);
+    expect(parsed.files).toHaveLength(1);
+    expect(parsed.files[0].file).toBe("plan.md");
+    expect(parsed.files[0].meta).toBeDefined();
   });
 
   test("log --json returns valid JSON with entries containing hash, message, date, author", async () => {
