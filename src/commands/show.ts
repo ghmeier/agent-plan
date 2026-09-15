@@ -1,36 +1,51 @@
+import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
-import { FileNotFoundError, NotInitializedError } from "../lib/errors";
+import { FileNotFoundError } from "../lib/errors";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
-import { GitPlumbing } from "../lib/git";
 import { colors } from "../lib/output";
-import { findRepoRoot } from "../lib/paths";
+import { findRepoRoot, getPlansDir } from "../lib/paths";
+import { ensurePlansWorktree } from "../lib/worktree";
+
+async function readFromHistory(plansDir: string, ref: string, planPath: string): Promise<string> {
+  const proc = Bun.spawn(["git", "show", `${ref}:${planPath}`], {
+    cwd: plansDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  if (exitCode !== 0) throw new Error(`No such file at ${ref}`);
+  return stdout;
+}
 
 export async function showPlan(
-  path: string,
+  planPath: string,
   options: { version?: string; json?: boolean; raw?: boolean },
   cwd?: string,
 ): Promise<string> {
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
-  const git = new GitPlumbing(repoRoot, config.branch);
 
-  if (!(await git.branchExists())) {
-    throw new NotInitializedError();
-  }
+  await ensurePlansWorktree(repoRoot, config);
+
+  const plansDir = getPlansDir(repoRoot);
 
   let content: string;
   try {
-    content = options.version
-      ? await git.exec(["show", `${options.version}:${path}`])
-      : await git.readFile(path);
+    if (options.version) {
+      content = await readFromHistory(plansDir, options.version, planPath);
+    } else {
+      const file = Bun.file(join(plansDir, planPath));
+      if (!(await file.exists())) throw new Error("not found");
+      content = await file.text();
+    }
   } catch {
-    throw new FileNotFoundError(path);
+    throw new FileNotFoundError(planPath);
   }
 
   if (options.json) {
     const { meta, content: body } = parseFrontmatter(content);
-    console.log(JSON.stringify({ path, content, meta, body }));
+    console.log(JSON.stringify({ path: planPath, content, meta, body }));
     return content;
   }
 
@@ -39,7 +54,6 @@ export async function showPlan(
     return content;
   }
 
-  // Default: print a header block then the body (without the frontmatter fence).
   const { meta, content: body, hasFrontmatter } = parseFrontmatter(content);
 
   if (hasFrontmatter) {
@@ -71,11 +85,13 @@ function printMetaHeader(meta: PlanMeta): void {
 export function registerShow(program: Command): void {
   program
     .command("show <path>")
-    .description("Show the contents of a stored plan")
-    .option("--version <ref>", "Show a historical version by commit hash")
+    .description("Show the contents of a plan file")
+    .option("--version <ref>", "Show a historical version by commit ref")
     .option("--json", "Output in JSON format")
     .option("--raw", "Print the file as-is, without the metadata header")
-    .action(async (path: string, options: { version?: string; json?: boolean; raw?: boolean }) => {
-      await showPlan(path, options);
-    });
+    .action(
+      async (planPath: string, options: { version?: string; json?: boolean; raw?: boolean }) => {
+        await showPlan(planPath, options);
+      },
+    );
 }

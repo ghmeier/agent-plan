@@ -28,23 +28,29 @@ apl sync
 
 AI coding workflows generate a steady stream of research docs, plans, and handoffs. Committing them to your main repo creates churn and review burden on files that are just markdown. Keeping them local means they can't be shared with teammates or survive a fresh clone. agent-plan solves this by storing plans on a separate git branch with its own history, synced with a single command, so there's never a question of whether or how to commit a plan file.
 
+## How It Works
+
+Plans live in a `.plans/` directory that `apl init` sets up as a git worktree on an independent orphan branch (default: `plans`). Agents and editors read and write plan files with normal file I/O. `apl commit` stages and commits whatever changed in `.plans/`. Because the branch is pushed to the same remote as your code, teammates get plans automatically on fetch, with no extra remote or auth setup.
+
+When you have multiple checkouts of the same repo (from `git worktree add` or a tool like `wt`), the main checkout owns the real `.plans/` worktree. Every other checkout gets `.plans` as a symlink to the main checkout's `.plans/`, so they all share the same files and commit to the same branch.
+
 ## Commands
 
-### `apl init [--branch <name>] [--worktree] [--auto-commit]`
+### `apl init [--branch <name>] [--auto-commit]`
 
-Initializes plan storage in the current repo. Creates the orphan branch (default: `plans`) if it doesn't exist, and writes `.plans/config.json`.
+Initializes plan storage in the current repo. Creates the plans branch if it doesn't exist (or builds on an existing remote branch to keep shared history), and sets up the `.plans/` worktree.
 
 - `--branch <name>`: use a branch name other than `plans`
-- `--worktree`: also materialize a `.plans/` worktree for direct file access (see below)
-- `--auto-commit`: install a git hook that commits worktree changes automatically
+- `--auto-commit`: install a git hook that commits worktree changes automatically after every commit
 
 ```bash
-apl init --branch plans --worktree --auto-commit
+apl init
+apl init --branch plans --auto-commit
 ```
 
 ### `apl add <file> [files...] [-m <message>]`
 
-Writes one or more files to the plans branch and commits immediately.
+Copies one or more files into `.plans/` at their repo-relative path, stamps frontmatter timestamps, and commits.
 
 ```bash
 apl add research.md plan.md -m "Add auth research and plan"
@@ -52,15 +58,16 @@ apl add research.md plan.md -m "Add auth research and plan"
 
 ### `apl commit [-m <message>]`
 
-Worktree mode only: stages and commits changes made directly in `.plans/`. Without worktree mode, this is a no-op that points you to `apl add`.
+Stages and commits all pending changes in `.plans/`. Stamps `updated` timestamps into any modified markdown files that have frontmatter.
 
 ```bash
+apl commit
 apl commit -m "Update plan after review"
 ```
 
 ### `apl show <path> [--version <ref>] [--json] [--raw]`
 
-Prints the contents of a plan file. Frontmatter fields are shown in a header block above the body. Use `--raw` to print the file exactly as stored (including the frontmatter fences). Use `--version` to view a historical revision.
+Prints the contents of a plan file. Reads from `.plans/<path>` directly, so uncommitted edits are visible. Use `--version` to read a historical revision from git history.
 
 ```bash
 apl show plan.md
@@ -70,7 +77,7 @@ apl show plan.md --version HEAD~2
 
 ### `apl ls [path] [--json] [--short] [--status <status>] [--tag <tag>]`
 
-Lists plan files, optionally under a subdirectory. The default output is a table showing filename, title, status, and tags. Use `--short` for the original filename-only output. Use `--status` and `--tag` to filter results (filters combine with AND).
+Lists markdown files in `.plans/`, including uncommitted ones, optionally under a subdirectory. The default output is a table showing filename, title, status, and tags. Use `--short` for filename-only output. Use `--status` and `--tag` to filter results (filters combine with AND).
 
 ```bash
 apl ls
@@ -86,20 +93,22 @@ apl ls --status active --tag cli
 Shows commit history for all plans, or for a single file.
 
 ```bash
+apl log
 apl log plan.md -n 5
 ```
 
-### `apl diff <file> [--json]`
+### `apl diff [file] [--json]`
 
-Diffs a local file against its last-committed version on the plans branch.
+Shows uncommitted changes in `.plans/` against HEAD, for all files or one.
 
 ```bash
+apl diff
 apl diff plan.md
 ```
 
 ### `apl sync`
 
-Fetches and fast-forwards the local plans ref, then pushes. Skips gracefully if no remote is configured.
+Commits any pending changes in `.plans/`, fast-forward pulls from the configured remote, then pushes. If local and remote have diverged, warns and exits with an error without pushing. Skips gracefully if no remote is configured.
 
 ```bash
 apl sync
@@ -131,24 +140,16 @@ Supported fields:
 
 Files without frontmatter work exactly as they do without it. Timestamps are only injected into files that already have a frontmatter block.
 
-## How It Works
-
-Plans live on an independent orphan branch (default: `plans`) with its own commit history, unrelated to your main branch. Reads use `git show plans:<path>` and writes use git plumbing (`hash-object`, `mktree`, `commit-tree`, `update-ref`) to commit directly to the branch — none of it touches your working tree or index. Because it's pushed to the same remote as your code, teammates get plans automatically on fetch, with no extra remote or auth setup.
-
-## Worktree Mode
-
-`apl init --worktree` checks out the plans branch into a `.plans/` directory, so agents and editors can read and write plan files with normal file I/O instead of going through the CLI. `apl commit` then stages and commits whatever changed in `.plans/`, same as a regular git commit.
-
 ## Agent Integration
 
+- **Normal file I/O**: agents read and write plan files in `.plans/` directly, without shelling out to the CLI for every edit.
 - **Structured output**: every read command (`show`, `ls`, `log`, `diff`) supports `--json` for scripting and parsing.
-- **Normal file I/O**: worktree mode lets agents read and write plan files directly instead of shelling out to the CLI for every edit.
-- **Automatic sync**: the auto-commit hook (`apl init --auto-commit`) keeps `.plans/` committed without a separate step.
+- **Automatic sync**: the auto-commit hook (`apl init --auto-commit`) commits `.plans/` changes automatically after every git commit.
 
 Example agent workflow:
 
 ```bash
-apl init --worktree --auto-commit
+apl init --auto-commit
 # agent writes /.plans/plan.md directly with normal file tools
 apl sync                    # push to remote so teammates see it
 apl show plan.md --json     # read back structured plan state later

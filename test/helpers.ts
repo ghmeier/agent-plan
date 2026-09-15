@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import path from "node:path";
+import path, { join } from "node:path";
+import { initPlans } from "../src/commands/init";
 
 export interface TestRepo {
   dir: string;
@@ -55,4 +56,79 @@ export async function createTestRepo(): Promise<TestRepo> {
   };
 
   return { dir, cleanup };
+}
+
+/**
+ * Initializes plan storage with a worktree in the given repo directory and
+ * returns the path to `.plans/`. Equivalent to running `apl init` for tests.
+ */
+export async function initTestPlans(
+  repoDir: string,
+  options: { branch?: string } = {},
+): Promise<string> {
+  await initPlans({ cwd: repoDir, branch: options.branch });
+  return join(repoDir, ".plans");
+}
+
+/**
+ * Writes a file into `.plans/` and commits it. Use this in tests that need
+ * a committed plan file without going through the `add` command.
+ */
+export async function writePlanFile(
+  repoDir: string,
+  planPath: string,
+  content: string,
+  message?: string,
+): Promise<void> {
+  const plansDir = join(repoDir, ".plans");
+  const destPath = join(plansDir, planPath);
+  await mkdir(path.dirname(destPath), { recursive: true });
+  await Bun.write(destPath, content);
+
+  const proc1 = Bun.spawn(["git", "add", "--", planPath], {
+    cwd: plansDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  await proc1.exited;
+
+  const proc2 = Bun.spawn(["git", "commit", "-m", message ?? `Add ${planPath}`], {
+    cwd: plansDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  await proc2.exited;
+}
+
+/**
+ * Creates a secondary git worktree of the given main repo at a temporary
+ * directory. The secondary worktree shares history with the main repo and
+ * is useful for testing the symlink behavior of ensurePlansWorktree.
+ */
+export async function createSecondaryWorktree(
+  mainDir: string,
+): Promise<{ dir: string; cleanup: () => Promise<void> }> {
+  const dir = await mkdtemp(path.join(tmpdir(), "agent-plan-wt-"));
+  // Remove the dir first since git worktree add creates it.
+  await rm(dir, { recursive: true, force: true });
+  await gitExec(mainDir, ["worktree", "add", dir]);
+
+  return {
+    dir,
+    cleanup: async () => {
+      // Prune the worktree reference regardless of whether the directory
+      // still exists, to keep the main repo's worktree list clean.
+      try {
+        await gitExec(mainDir, ["worktree", "remove", "--force", dir]);
+      } catch {
+        // already gone or prune will clean it up
+        try {
+          await gitExec(mainDir, ["worktree", "prune"]);
+        } catch {
+          // best effort
+        }
+      }
+      await rm(dir, { recursive: true, force: true });
+    },
+  };
 }

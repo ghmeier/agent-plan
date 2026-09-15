@@ -1,70 +1,69 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { readConfig, writeConfig } from "../../src/lib/config";
 import { DEFAULT_CONFIG, type PlanConfig } from "../../src/types";
-
-const tempDirs: string[] = [];
-
-async function makeTempRepo(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "agent-plan-config-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  while (tempDirs.length > 0) {
-    const dir = tempDirs.pop();
-    if (dir) await rm(dir, { recursive: true, force: true });
-  }
-});
+import { createTestRepo } from "../helpers";
 
 describe("readConfig", () => {
   test("returns defaults when no config file exists", async () => {
-    const repoRoot = await makeTempRepo();
+    const repo = await createTestRepo();
 
-    const config = await readConfig(repoRoot);
+    try {
+      const config = await readConfig(repo.dir);
 
-    expect(config).toEqual(DEFAULT_CONFIG);
+      expect(config).toEqual(DEFAULT_CONFIG);
+    } finally {
+      await repo.cleanup();
+    }
   });
 
   test("preserves a custom branch name from disk", async () => {
-    const repoRoot = await makeTempRepo();
-    const custom: PlanConfig = {
-      branch: "my-plans",
-      remote: "upstream",
-      worktree: true,
-    };
-    await writeConfig(repoRoot, custom);
+    const repo = await createTestRepo();
 
-    const config = await readConfig(repoRoot);
+    try {
+      const custom: PlanConfig = { branch: "my-plans", remote: "upstream" };
+      await writeConfig(repo.dir, custom);
 
-    expect(config.branch).toBe("my-plans");
+      const config = await readConfig(repo.dir);
+
+      expect(config.branch).toBe("my-plans");
+    } finally {
+      await repo.cleanup();
+    }
   });
 });
 
 describe("writeConfig", () => {
   test("round-trips through readConfig", async () => {
-    const repoRoot = await makeTempRepo();
-    const custom: PlanConfig = {
-      branch: "feature-plans",
-      remote: "origin",
-      worktree: false,
-    };
+    const repo = await createTestRepo();
 
-    await writeConfig(repoRoot, custom);
-    const readBack = await readConfig(repoRoot);
+    try {
+      const custom: PlanConfig = { branch: "feature-plans", remote: "origin" };
 
-    expect(readBack).toEqual(custom);
+      await writeConfig(repo.dir, custom);
+      const readBack = await readConfig(repo.dir);
+
+      expect(readBack).toEqual(custom);
+    } finally {
+      await repo.cleanup();
+    }
   });
 
-  test("creates the .plans directory when missing", async () => {
-    const repoRoot = await makeTempRepo();
+  test("stores config inside .git, not in the working tree", async () => {
+    const repo = await createTestRepo();
 
-    await writeConfig(repoRoot, DEFAULT_CONFIG);
+    try {
+      await writeConfig(repo.dir, DEFAULT_CONFIG);
 
-    const file = Bun.file(join(repoRoot, ".plans", "config.json"));
-    expect(await file.exists()).toBe(true);
+      // Config must live in .git/agent-plan/, never in the working tree.
+      const insideGit = Bun.file(join(repo.dir, ".git", "agent-plan", "config.json"));
+      expect(await insideGit.exists()).toBe(true);
+
+      // The working tree must not contain a config.json from this write.
+      const inWorktree = Bun.file(join(repo.dir, ".plans", "config.json"));
+      expect(await inWorktree.exists()).toBe(false);
+    } finally {
+      await repo.cleanup();
+    }
   });
 });

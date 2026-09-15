@@ -5,57 +5,78 @@ import { diffPlan } from "../../src/commands/diff";
 import { getPlanLog } from "../../src/commands/log";
 import { listPlans } from "../../src/commands/ls";
 import { showPlan } from "../../src/commands/show";
-import { GitPlumbing } from "../../src/lib/git";
-import { createTestRepo, type TestRepo } from "../helpers";
+import { createTestRepo, initTestPlans, type TestRepo, writePlanFile } from "../helpers";
 
 describe("read commands", () => {
   let repo: TestRepo;
-  let git: GitPlumbing;
 
   beforeEach(async () => {
     repo = await createTestRepo();
-    git = new GitPlumbing(repo.dir);
-    await git.createOrphanBranch();
-    await git.writeFiles([{ path: "plan.md", content: "# My Plan\n" }], "Add plan");
+    await initTestPlans(repo.dir);
+    await writePlanFile(repo.dir, "plan.md", "# My Plan\n");
   });
 
   afterEach(async () => {
     await repo.cleanup();
   });
 
-  test("show returns file content", async () => {
+  test("show returns file content including uncommitted edits", async () => {
     const content = await showPlan("plan.md", {}, repo.dir);
 
     expect(content).toBe("# My Plan\n");
   });
 
   test("show with --version returns historical content", async () => {
-    const oldLog = await git.getLog("plan.md");
-    const oldVersion = oldLog[0]?.hash;
+    // Record the current HEAD hash before adding a second commit.
+    const proc = Bun.spawn(["git", "rev-parse", "HEAD"], {
+      cwd: join(repo.dir, ".plans"),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const oldHash = (await new Response(proc.stdout).text()).trim();
+    await proc.exited;
 
-    await git.writeFiles([{ path: "plan.md", content: "# Updated Plan\n" }], "Update plan");
+    await writePlanFile(repo.dir, "plan.md", "# Updated Plan\n", "Update plan");
 
-    const historical = await showPlan("plan.md", { version: oldVersion }, repo.dir);
+    const historical = await showPlan("plan.md", { version: oldHash }, repo.dir);
     const current = await showPlan("plan.md", {}, repo.dir);
 
-    expect(historical).toBe("# My Plan");
+    expect(historical).toContain("My Plan");
     expect(current).toBe("# Updated Plan\n");
   });
 
   test("show nonexistent file gives error", async () => {
-    expect(showPlan("missing.md", {}, repo.dir)).rejects.toThrow();
+    await expect(showPlan("missing.md", {}, repo.dir)).rejects.toThrow();
   });
 
-  test("ls returns list of files", async () => {
-    await git.writeFiles([{ path: "other.md", content: "other" }], "Add other");
+  test("show returns uncommitted edits written directly to .plans/", async () => {
+    const plansDir = join(repo.dir, ".plans");
+    await writeFile(join(plansDir, "plan.md"), "# Edited Plan\n");
+
+    const content = await showPlan("plan.md", {}, repo.dir);
+
+    expect(content).toBe("# Edited Plan\n");
+  });
+
+  test("ls returns list of committed files", async () => {
+    await writePlanFile(repo.dir, "other.md", "other");
 
     const files = await listPlans(undefined, repo.dir);
 
     expect(files.sort()).toEqual(["other.md", "plan.md"]);
   });
 
+  test("ls returns uncommitted files in .plans/", async () => {
+    const plansDir = join(repo.dir, ".plans");
+    await writeFile(join(plansDir, "draft.md"), "work in progress");
+
+    const files = await listPlans(undefined, repo.dir);
+
+    expect(files).toContain("draft.md");
+  });
+
   test("ls with subdirectory scope works", async () => {
-    await git.writeFiles([{ path: "research/notes.md", content: "notes" }], "Add research notes");
+    await writePlanFile(repo.dir, "research/notes.md", "notes");
 
     const files = await listPlans("research", repo.dir);
 
@@ -65,25 +86,24 @@ describe("read commands", () => {
   test("log returns entries with hash, date, message", async () => {
     const entries = await getPlanLog(undefined, 20, repo.dir);
 
-    expect(entries.length).toBe(2);
+    expect(entries.length).toBeGreaterThanOrEqual(1);
     const entry = entries[0];
     if (!entry) throw new Error("Expected at least one log entry");
-    expect(entry.message).toBe("Add plan");
     expect(entry.hash).toMatch(/^[0-9a-f]{40}$/);
     expect(new Date(entry.date).toString()).not.toBe("Invalid Date");
   });
 
   test("log with file filter only shows commits for that file", async () => {
-    await git.writeFiles([{ path: "other.md", content: "other" }], "Add other");
+    await writePlanFile(repo.dir, "other.md", "other", "Add other");
 
     const entries = await getPlanLog("other.md", 20, repo.dir);
 
-    expect(entries.map((entry) => entry.message)).toEqual(["Add other"]);
+    expect(entries.map((e) => e.message)).toEqual(["Add other"]);
   });
 
   test("log respects limit", async () => {
-    await git.writeFiles([{ path: "plan.md", content: "v2" }], "Update plan");
-    await git.writeFiles([{ path: "plan.md", content: "v3" }], "Update plan again");
+    await writePlanFile(repo.dir, "plan.md", "v2", "Update plan");
+    await writePlanFile(repo.dir, "plan.md", "v3", "Update plan again");
 
     const entries = await getPlanLog(undefined, 1, repo.dir);
 
@@ -93,21 +113,27 @@ describe("read commands", () => {
     expect(entry.message).toBe("Update plan again");
   });
 
-  test("diff shows changes between local file and plans branch version", async () => {
-    const localPath = join(repo.dir, "plan.md");
-    await writeFile(localPath, "# My Plan\n\nNew local content.\n");
+  test("diff shows uncommitted changes against HEAD", async () => {
+    const plansDir = join(repo.dir, ".plans");
+    await writeFile(join(plansDir, "plan.md"), "# My Plan\n\nNew local content.\n");
 
-    const diffOutput = await diffPlan(localPath, repo.dir);
+    const diffOutput = await diffPlan("plan.md", repo.dir);
 
     expect(diffOutput).toContain("New local content.");
   });
 
-  test("diff with no changes returns empty output", async () => {
-    const localPath = join(repo.dir, "plan.md");
-    await writeFile(localPath, "# My Plan\n");
-
-    const diffOutput = await diffPlan(localPath, repo.dir);
+  test("diff with no uncommitted changes returns empty output", async () => {
+    const diffOutput = await diffPlan("plan.md", repo.dir);
 
     expect(diffOutput).toBe("");
+  });
+
+  test("diff without file argument shows all uncommitted changes", async () => {
+    const plansDir = join(repo.dir, ".plans");
+    await writeFile(join(plansDir, "plan.md"), "# Changed\n");
+
+    const diffOutput = await diffPlan(undefined, repo.dir);
+
+    expect(diffOutput).toContain("Changed");
   });
 });

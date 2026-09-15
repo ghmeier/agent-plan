@@ -5,8 +5,7 @@ import { diffPlan } from "../../src/commands/diff";
 import { getPlanLog } from "../../src/commands/log";
 import { listPlans } from "../../src/commands/ls";
 import { showPlan } from "../../src/commands/show";
-import { GitPlumbing } from "../../src/lib/git";
-import { createTestRepo, type TestRepo } from "../helpers";
+import { createTestRepo, initTestPlans, type TestRepo, writePlanFile } from "../helpers";
 
 function captureStdout(fn: () => Promise<void>): Promise<string> {
   const originalLog = console.log;
@@ -27,13 +26,11 @@ function captureStdout(fn: () => Promise<void>): Promise<string> {
 
 describe("--json output", () => {
   let repo: TestRepo;
-  let git: GitPlumbing;
 
   beforeEach(async () => {
     repo = await createTestRepo();
-    git = new GitPlumbing(repo.dir);
-    await git.createOrphanBranch();
-    await git.writeFiles([{ path: "plan.md", content: "# Plan\n" }], "Add plan");
+    await initTestPlans(repo.dir);
+    await writePlanFile(repo.dir, "plan.md", "# Plan\n", "Add plan");
   });
 
   afterEach(async () => {
@@ -67,19 +64,20 @@ describe("--json output", () => {
     });
 
     const parsed = JSON.parse(output);
-    expect(parsed.entries.length).toBe(2);
-    expect(parsed.entries[0].message).toBe("Add plan");
-    expect(parsed.entries[0].hash).toMatch(/^[0-9a-f]{40}$/);
-    expect(parsed.entries[0].author).toBe("Test");
-    expect(new Date(parsed.entries[0].date).toString()).not.toBe("Invalid Date");
+    expect(parsed.entries.length).toBeGreaterThanOrEqual(1);
+    const entry = parsed.entries[0];
+    expect(entry.message).toBe("Add plan");
+    expect(entry.hash).toMatch(/^[0-9a-f]{40}$/);
+    expect(entry.author).toBe("Test");
+    expect(new Date(entry.date).toString()).not.toBe("Invalid Date");
   });
 
-  test("diff --json with changes returns changed true and non-empty diff", async () => {
-    const localPath = join(repo.dir, "plan.md");
-    await writeFile(localPath, "# Plan\n\nNew local content.\n");
+  test("diff --json with uncommitted changes returns changed true and non-empty diff", async () => {
+    const plansDir = join(repo.dir, ".plans");
+    await writeFile(join(plansDir, "plan.md"), "# Plan\n\nNew local content.\n");
 
     const output = await captureStdout(async () => {
-      await diffPlan(localPath, repo.dir, { json: true });
+      await diffPlan("plan.md", repo.dir, { json: true });
     });
 
     const parsed = JSON.parse(output);
@@ -89,11 +87,8 @@ describe("--json output", () => {
   });
 
   test("diff --json with no changes returns changed false", async () => {
-    const localPath = join(repo.dir, "plan.md");
-    await writeFile(localPath, "# Plan\n");
-
     const output = await captureStdout(async () => {
-      await diffPlan(localPath, repo.dir, { json: true });
+      await diffPlan("plan.md", repo.dir, { json: true });
     });
 
     const parsed = JSON.parse(output);

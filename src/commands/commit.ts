@@ -4,37 +4,51 @@ import { readConfig } from "../lib/config";
 import { stampTimestamps } from "../lib/frontmatter";
 import { info, success } from "../lib/output";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
+import { ensurePlansWorktree } from "../lib/worktree";
 
-const PLACEHOLDER_MESSAGE =
-  "Nothing to commit. Use 'apl add <file>' to add files to plans.\n" +
-  "In worktree mode, 'apl commit' commits all changes in .plans/";
-
-async function run(args: string[], cwd: string): Promise<{ exitCode: number; stdout?: string }> {
+async function runGit(
+  args: string[],
+  cwd: string,
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(["git", ...args], {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
   });
 
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-  return { exitCode, stdout };
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+
+  return { exitCode, stdout, stderr };
 }
 
 /**
- * For each modified markdown file in the plans worktree that already has
- * frontmatter, rewrite the file with an updated `updated` timestamp so
- * agents that edit files directly still get timestamp tracking.
+ * Stages all changes with `git add -A`, stamps updated timestamps into
+ * modified markdown files that already have frontmatter, then re-stages them.
+ * Returns true when there are staged changes ready to commit.
  */
-async function stampChangedFiles(plansDir: string): Promise<void> {
-  const { stdout } = await run(["status", "--porcelain"], plansDir);
-  const lines = (stdout ?? "").split("\n").filter((l) => l.length > 0);
+async function stageAndStamp(plansDir: string): Promise<boolean> {
+  await runGit(["add", "-A"], plansDir);
 
-  for (const line of lines) {
-    // Columns 0-1 are the XY status; column 2 is a space; path follows.
-    const filePath = line.slice(3).trim();
-    if (!filePath.endsWith(".md")) continue;
+  // List added/modified markdown files in the index using NUL-delimited output
+  // so paths with spaces or special characters are handled correctly.
+  const { stdout: nameList } = await runGit(
+    ["diff", "--cached", "--name-only", "-z", "--diff-filter=AM"],
+    plansDir,
+  );
 
-    const fullPath = join(plansDir, filePath);
+  const stagedPaths = nameList
+    .split("\0")
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0 && p.endsWith(".md"));
+
+  const toRestage: string[] = [];
+
+  for (const relPath of stagedPaths) {
+    const fullPath = join(plansDir, relPath);
     const file = Bun.file(fullPath);
     if (!(await file.exists())) continue;
 
@@ -42,33 +56,37 @@ async function stampChangedFiles(plansDir: string): Promise<void> {
     const stamped = stampTimestamps(raw);
     if (stamped !== raw) {
       await Bun.write(fullPath, stamped);
+      toRestage.push(relPath);
     }
   }
+
+  if (toRestage.length > 0) {
+    await runGit(["add", "--", ...toRestage], plansDir);
+  }
+
+  const { exitCode: diffExitCode } = await runGit(["diff", "--cached", "--quiet"], plansDir);
+  return diffExitCode !== 0;
 }
 
 export async function commitPlans(options: { message?: string; cwd?: string } = {}): Promise<void> {
   const repoRoot = await findRepoRoot(options.cwd);
   const config = await readConfig(repoRoot);
 
-  if (!config.worktree) {
-    info(PLACEHOLDER_MESSAGE);
-    return;
-  }
+  await ensurePlansWorktree(repoRoot, config);
 
   const plansDir = getPlansDir(repoRoot);
+  const hasChanges = await stageAndStamp(plansDir);
 
-  await stampChangedFiles(plansDir);
-
-  await run(["add", "-A"], plansDir);
-
-  const { exitCode: diffExitCode } = await run(["diff", "--cached", "--quiet"], plansDir);
-  if (diffExitCode === 0) {
+  if (!hasChanges) {
     info("Nothing to commit");
     return;
   }
 
   const message = options.message ?? "Update plans";
-  await run(["commit", "-m", message], plansDir);
+  const { exitCode, stderr } = await runGit(["commit", "-m", message], plansDir);
+  if (exitCode !== 0) {
+    throw new Error(`git commit failed: ${stderr.trim()}`);
+  }
 
   success("Committed plan changes");
 }
@@ -76,7 +94,7 @@ export async function commitPlans(options: { message?: string; cwd?: string } = 
 export function registerCommit(program: Command): void {
   program
     .command("commit")
-    .description("Commit staged plan changes")
+    .description("Commit pending changes in .plans/")
     .option("-m, --message <msg>", "Commit message")
     .action(async (opts) => {
       await commitPlans(opts);

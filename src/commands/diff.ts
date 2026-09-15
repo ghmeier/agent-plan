@@ -1,36 +1,45 @@
-import path from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
-import { FileNotFoundError, NotInitializedError } from "../lib/errors";
-import { GitPlumbing } from "../lib/git";
-import { findRepoRoot, resolvePlanPath } from "../lib/paths";
+import { findRepoRoot, getPlansDir } from "../lib/paths";
+import { ensurePlansWorktree } from "../lib/worktree";
+
+async function gitDiff(plansDir: string, planPath?: string): Promise<string> {
+  const args = ["diff", "HEAD"];
+  if (planPath) args.push("--", planPath);
+
+  const proc = Bun.spawn(["git", ...args], {
+    cwd: plansDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+
+  // git diff exits 0 (no diff) or 1 (diff found); anything else is a real error.
+  if (exitCode > 1) {
+    const stderr = await new Response(proc.stderr).text();
+    throw new Error(`git diff failed (exit ${exitCode}): ${stderr.trim()}`);
+  }
+
+  return stdout;
+}
 
 export async function diffPlan(
-  file: string,
+  file?: string,
   cwd?: string,
   options: { json?: boolean } = {},
 ): Promise<string> {
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
-  const git = new GitPlumbing(repoRoot, config.branch);
 
-  if (!(await git.branchExists())) {
-    throw new NotInitializedError();
-  }
+  await ensurePlansWorktree(repoRoot, config);
 
-  const absoluteFilePath = path.resolve(cwd ?? process.cwd(), file);
-  const planPath = resolvePlanPath(repoRoot, absoluteFilePath);
-
-  let diffOutput: string;
-  try {
-    diffOutput = await git.diff(planPath, absoluteFilePath);
-  } catch {
-    throw new FileNotFoundError(planPath);
-  }
+  const plansDir = getPlansDir(repoRoot);
+  const diffOutput = await gitDiff(plansDir, file);
 
   if (options.json) {
     console.log(
-      JSON.stringify({ path: planPath, changed: diffOutput.length > 0, diff: diffOutput }),
+      JSON.stringify({ path: file ?? null, changed: diffOutput.length > 0, diff: diffOutput }),
     );
   }
 
@@ -39,10 +48,10 @@ export async function diffPlan(
 
 export function registerDiff(program: Command): void {
   program
-    .command("diff <file>")
-    .description("Show differences between stored plan versions")
+    .command("diff [file]")
+    .description("Show uncommitted changes in .plans/ against HEAD")
     .option("--json", "Output in JSON format")
-    .action(async (file: string, options: { json?: boolean }) => {
+    .action(async (file: string | undefined, options: { json?: boolean }) => {
       const diffOutput = await diffPlan(file, undefined, options);
       if (!options.json) {
         console.log(diffOutput.length > 0 ? diffOutput : "No changes");

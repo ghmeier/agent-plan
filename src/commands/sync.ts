@@ -3,17 +3,35 @@ import { readConfig } from "../lib/config";
 import { NotInitializedError } from "../lib/errors";
 import { GitPlumbing } from "../lib/git";
 import { info, error as logError, success, warn } from "../lib/output";
-import { findRepoRoot } from "../lib/paths";
+import { findRepoRoot, getPlansDir } from "../lib/paths";
+import { ensurePlansWorktree } from "../lib/worktree";
+import { commitPlans } from "./commit";
 
 export interface SyncOptions {
   cwd?: string;
 }
 
+async function runGitInPlans(
+  args: string[],
+  plansDir: string,
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const proc = Bun.spawn(["git", ...args], {
+    cwd: plansDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  return { exitCode, stdout, stderr };
+}
+
 /**
- * Syncs the plans branch with the configured remote: fetches and
- * fast-forwards from the remote when possible, then pushes local changes.
- * Exported separately from the Commander action so it can be exercised
- * directly in tests without going through the CLI.
+ * Syncs the plans branch: commits pending worktree changes, fast-forward pulls
+ * from the remote, then pushes. Exits with a warning when histories have
+ * diverged. Skips gracefully when no remote is configured.
  */
 export async function syncPlans(options: SyncOptions = {}): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
@@ -25,6 +43,7 @@ export async function syncPlans(options: SyncOptions = {}): Promise<void> {
     throw new NotInitializedError();
   }
 
+  // Confirm a remote is configured before doing anything.
   try {
     await git.exec(["remote", "get-url", config.remote]);
   } catch {
@@ -32,43 +51,54 @@ export async function syncPlans(options: SyncOptions = {}): Promise<void> {
     return;
   }
 
-  const remoteRef = `${config.remote}/${config.branch}`;
+  await ensurePlansWorktree(repoRoot, config);
 
-  let fetched = true;
-  try {
-    await git.exec(["fetch", config.remote, config.branch]);
-  } catch {
-    fetched = false;
-  }
+  // Commit any pending edits in .plans/ before syncing, so they travel with this push.
+  await commitPlans({ cwd });
 
-  if (fetched) {
-    let isAncestor = true;
-    try {
-      await git.exec(["merge-base", "--is-ancestor", config.branch, remoteRef]);
-    } catch {
-      isAncestor = false;
-    }
+  const plansDir = getPlansDir(repoRoot);
 
-    if (isAncestor) {
-      await git.exec(["update-ref", `refs/heads/${config.branch}`, remoteRef]);
-    } else {
-      // When histories are unrelated (e.g. a freshly-initialized orphan branch
-      // that has never shared an ancestor with the remote), check whether the
-      // local branch actually carries any files. An empty local branch can be
-      // safely reset to the remote without losing work.
-      const localFiles = await git.listFiles();
-      if (localFiles.length === 0) {
-        await git.exec(["update-ref", `refs/heads/${config.branch}`, remoteRef]);
-      } else {
-        warn("Local plans have diverged from remote, push may fail");
-      }
+  const { exitCode: fetchCode, stderr: fetchErr } = await runGitInPlans(
+    ["fetch", config.remote, config.branch],
+    plansDir,
+  );
+
+  const remoteHasBranch = fetchCode === 0;
+
+  if (!remoteHasBranch) {
+    // If fetch failed for a reason other than the branch not existing on the remote,
+    // report the error but still attempt to push (which will also fail with a clear message).
+    const missingRef = fetchErr.includes("couldn't find remote ref");
+    if (!missingRef) {
+      logError(`fetch failed: ${fetchErr.trim()}`);
     }
   }
 
-  try {
-    await git.exec(["push", config.remote, config.branch]);
-  } catch (err) {
-    logError(err instanceof Error ? err.message : String(err));
+  if (remoteHasBranch) {
+    // Attempt a fast-forward merge from the remote ref.
+    const { exitCode: pullCode } = await runGitInPlans(
+      ["merge", "--ff-only", `${config.remote}/${config.branch}`],
+      plansDir,
+    );
+
+    if (pullCode !== 0) {
+      warn(
+        `Local plans have diverged from ${config.remote}/${config.branch}. ` +
+          "Resolve the conflict manually, then sync again.",
+      );
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  const { exitCode: pushCode, stderr: pushErr } = await runGitInPlans(
+    ["push", config.remote, `HEAD:${config.branch}`],
+    plansDir,
+  );
+
+  if (pushCode !== 0) {
+    logError(`push failed: ${pushErr.trim()}`);
+    return;
   }
 
   success(`Synced plans with ${config.remote}`);
@@ -77,7 +107,7 @@ export async function syncPlans(options: SyncOptions = {}): Promise<void> {
 export function registerSync(program: Command): void {
   program
     .command("sync")
-    .description("Sync plan storage with the remote")
+    .description("Commit pending changes, pull from remote, and push")
     .action(async () => {
       await syncPlans();
     });

@@ -1,10 +1,11 @@
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
-import { NotInitializedError } from "../lib/errors";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
-import { GitPlumbing } from "../lib/git";
 import { colors, info } from "../lib/output";
-import { findRepoRoot } from "../lib/paths";
+import { findRepoRoot, getPlansDir } from "../lib/paths";
+import { ensurePlansWorktree } from "../lib/worktree";
 
 export interface LsOptions {
   json?: boolean;
@@ -18,6 +19,37 @@ export interface PlanEntry {
   meta: PlanMeta;
 }
 
+/** Recursively lists .md files under dir, returning repo-relative posix paths. */
+async function listMarkdownFiles(dir: string, base = dir): Promise<string[]> {
+  const results: string[] = [];
+  // biome-ignore lint/suspicious/noExplicitAny: bun types differ from Node types for Dirent
+  let entries: any[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+
+  for (const entry of entries) {
+    // Skip git internals.
+    if (entry.name === ".git") continue;
+
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...(await listMarkdownFiles(fullPath, base)));
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      // Use posix separators for consistent cross-platform output.
+      const rel = fullPath
+        .slice(base.length + 1)
+        .split(/[\\/]/)
+        .join("/");
+      results.push(rel);
+    }
+  }
+
+  return results.sort();
+}
+
 export async function listPlans(
   path?: string,
   cwd?: string,
@@ -25,18 +57,17 @@ export async function listPlans(
 ): Promise<string[]> {
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
-  const git = new GitPlumbing(repoRoot, config.branch);
 
-  if (!(await git.branchExists())) {
-    throw new NotInitializedError();
-  }
+  await ensurePlansWorktree(repoRoot, config);
 
-  const allFiles = await git.listFiles(path);
+  const plansDir = getPlansDir(repoRoot);
+  const searchDir = path ? join(plansDir, path) : plansDir;
 
-  // Build entries with parsed metadata so we can filter and display them.
+  const allFiles = await listMarkdownFiles(searchDir, plansDir);
+
   const entries: PlanEntry[] = await Promise.all(
     allFiles.map(async (file) => {
-      const raw = await git.readFile(file);
+      const raw = await Bun.file(join(plansDir, file)).text();
       const { meta } = parseFrontmatter(raw);
       return { file, meta };
     }),
@@ -58,7 +89,6 @@ export async function listPlans(
   }
 
   if (options.short) {
-    // Legacy filename-only output.
     if (files.length === 0) {
       info("No files found");
     } else {
@@ -69,7 +99,6 @@ export async function listPlans(
     return files;
   }
 
-  // Default: aligned table.
   if (filtered.length === 0) {
     info("No files found");
     return files;
@@ -80,7 +109,6 @@ export async function listPlans(
 }
 
 function printTable(entries: PlanEntry[]): void {
-  // Column headers.
   const headers = ["FILE", "TITLE", "STATUS", "TAGS"];
 
   const rows = entries.map((e) => [
@@ -90,14 +118,12 @@ function printTable(entries: PlanEntry[]): void {
     e.meta.tags?.join(", ") ?? "",
   ]);
 
-  // Compute column widths as the max of header and all row values.
   const widths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]?.length ?? 0)));
 
   function pad(s: string, w: number): string {
     return s.padEnd(w);
   }
 
-  // Header row in bold.
   const headerLine = headers.map((h, i) => colors.bold(pad(h, widths[i] ?? h.length))).join("  ");
   console.log(headerLine);
 
@@ -110,7 +136,7 @@ function printTable(entries: PlanEntry[]): void {
 export function registerLs(program: Command): void {
   program
     .command("ls [path]")
-    .description("List stored plans")
+    .description("List plan files in .plans/")
     .option("--json", "Output in JSON format")
     .option("--short", "Filename-only output (one per line)")
     .option("--status <status>", "Filter by status (draft, active, completed, archived)")

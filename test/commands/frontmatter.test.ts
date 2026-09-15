@@ -5,7 +5,7 @@ import { listPlans } from "../../src/commands/ls";
 import { showPlan } from "../../src/commands/show";
 import { parseFrontmatter, today } from "../../src/lib/frontmatter";
 import { GitPlumbing } from "../../src/lib/git";
-import { createTestRepo, type TestRepo } from "../helpers";
+import { createTestRepo, initTestPlans, type TestRepo, writePlanFile } from "../helpers";
 
 // Redirects console.log output to a captured string so tests can inspect
 // what commands would have printed without cluttering test output.
@@ -78,16 +78,10 @@ describe("ls filters", () => {
 
   beforeEach(async () => {
     repo = await createTestRepo();
-    const git = new GitPlumbing(repo.dir);
-    await git.createOrphanBranch();
-    await git.writeFiles(
-      [
-        { path: "cli.md", content: FRONTMATTER_ACTIVE_CLI },
-        { path: "bug.md", content: FRONTMATTER_DRAFT_BUG },
-        { path: "old.md", content: FRONTMATTER_ARCHIVED },
-      ],
-      "Add test plans",
-    );
+    await initTestPlans(repo.dir);
+    await writePlanFile(repo.dir, "cli.md", FRONTMATTER_ACTIVE_CLI, "Add cli");
+    await writePlanFile(repo.dir, "bug.md", FRONTMATTER_DRAFT_BUG, "Add bug");
+    await writePlanFile(repo.dir, "old.md", FRONTMATTER_ARCHIVED, "Add old");
   });
 
   afterEach(async () => {
@@ -165,9 +159,8 @@ describe("show --raw", () => {
 
   beforeEach(async () => {
     repo = await createTestRepo();
-    const git = new GitPlumbing(repo.dir);
-    await git.createOrphanBranch();
-    await git.writeFiles([{ path: "plan.md", content: FRONTMATTER_ACTIVE_CLI }], "Add plan");
+    await initTestPlans(repo.dir);
+    await writePlanFile(repo.dir, "plan.md", FRONTMATTER_ACTIVE_CLI, "Add plan");
   });
 
   afterEach(async () => {
@@ -213,8 +206,7 @@ describe("apl add timestamps", () => {
 
   beforeEach(async () => {
     repo = await createTestRepo();
-    const git = new GitPlumbing(repo.dir);
-    await git.createOrphanBranch();
+    await initTestPlans(repo.dir);
   });
 
   afterEach(async () => {
