@@ -1,19 +1,9 @@
-import {
-  appendFile,
-  lstat,
-  mkdir,
-  readFile,
-  realpath,
-  rm,
-  symlink,
-  writeFile,
-} from "node:fs/promises";
+import { appendFile, lstat, readFile, realpath, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 import type { PlanConfig } from "../types";
-import { DEFAULT_CONFIG } from "../types";
 import { NotInitializedError } from "./errors";
 import { GitPlumbing } from "./git";
-import { getConfigPath, getGitCommonDir, getMainWorktreeRoot, getPlansDir } from "./paths";
+import { getGitCommonDir, getMainWorktreeRoot, getPlansDir } from "./paths";
 
 async function realpathSafe(p: string): Promise<string> {
   try {
@@ -79,38 +69,7 @@ async function addWorktreeDir(repoRoot: string, plansDir: string, branch: string
   }
 
   if (existing !== null) {
-    if (existing.isSymbolicLink()) {
-      await rm(plansDir);
-    } else {
-      // If the new config location is empty but an old plain-directory .plans/config.json
-      // exists, copy branch and remote over before deleting the directory.
-      const gitCommonDir = await getGitCommonDir(repoRoot);
-      const newConfigPath = getConfigPath(gitCommonDir);
-      let newConfigExists = false;
-      try {
-        await lstat(newConfigPath);
-        newConfigExists = true;
-      } catch {
-        // no-op
-      }
-
-      if (!newConfigExists) {
-        try {
-          const raw = await readFile(path.join(plansDir, "config.json"), "utf8");
-          const old = JSON.parse(raw) as Partial<{ branch: string; remote: string }>;
-          const migrated: PlanConfig = {
-            branch: old.branch ?? DEFAULT_CONFIG.branch,
-            remote: old.remote ?? DEFAULT_CONFIG.remote,
-          };
-          await mkdir(path.dirname(newConfigPath), { recursive: true });
-          await writeFile(newConfigPath, JSON.stringify(migrated, null, 2));
-        } catch {
-          // no old config to migrate
-        }
-      }
-
-      await rm(plansDir, { recursive: true, force: true });
-    }
+    await rm(plansDir, { recursive: true, force: true });
   }
 
   await git.exec(["worktree", "add", plansDir, branch]);
