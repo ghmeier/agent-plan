@@ -9,6 +9,7 @@
   },
   "module": "src/index.ts",
   "type": "module",
+  "private": true,
   "bin": {
     "agent-plan": "src/index.ts",
     "apl": "src/index.ts"
