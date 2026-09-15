@@ -11,12 +11,12 @@ export interface SyncOptions {
   cwd?: string;
 }
 
-async function runGitInPlans(
+async function runGit(
   args: string[],
-  plansDir: string,
+  cwd: string,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(["git", ...args], {
-    cwd: plansDir,
+    cwd,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -43,7 +43,6 @@ export async function syncPlans(options: SyncOptions = {}): Promise<void> {
     throw new NotInitializedError();
   }
 
-  // Confirm a remote is configured before doing anything.
   try {
     await git.exec(["remote", "get-url", config.remote]);
   } catch {
@@ -58,25 +57,27 @@ export async function syncPlans(options: SyncOptions = {}): Promise<void> {
 
   const plansDir = getPlansDir(repoRoot);
 
-  const { exitCode: fetchCode, stderr: fetchErr } = await runGitInPlans(
+  // Fetch and push run from repoRoot so that relative remote URLs (like ../remote.git)
+  // resolve relative to the repo root rather than the .plans/ worktree directory.
+  const { exitCode: fetchCode, stderr: fetchErr } = await runGit(
     ["fetch", config.remote, config.branch],
-    plansDir,
+    repoRoot,
   );
 
   const remoteHasBranch = fetchCode === 0;
 
   if (!remoteHasBranch) {
-    // If fetch failed for a reason other than the branch not existing on the remote,
-    // report the error but still attempt to push (which will also fail with a clear message).
     const missingRef = fetchErr.includes("couldn't find remote ref");
     if (!missingRef) {
       logError(`fetch failed: ${fetchErr.trim()}`);
+      process.exitCode = 1;
+      return;
     }
   }
 
   if (remoteHasBranch) {
-    // Attempt a fast-forward merge from the remote ref.
-    const { exitCode: pullCode } = await runGitInPlans(
+    // Merge must run inside .plans/ to update that worktree's HEAD.
+    const { exitCode: pullCode } = await runGit(
       ["merge", "--ff-only", `${config.remote}/${config.branch}`],
       plansDir,
     );
@@ -91,13 +92,15 @@ export async function syncPlans(options: SyncOptions = {}): Promise<void> {
     }
   }
 
-  const { exitCode: pushCode, stderr: pushErr } = await runGitInPlans(
-    ["push", config.remote, `HEAD:${config.branch}`],
-    plansDir,
+  // Use the full local refspec so this works from any CWD.
+  const { exitCode: pushCode, stderr: pushErr } = await runGit(
+    ["push", config.remote, `refs/heads/${config.branch}:refs/heads/${config.branch}`],
+    repoRoot,
   );
 
   if (pushCode !== 0) {
     logError(`push failed: ${pushErr.trim()}`);
+    process.exitCode = 1;
     return;
   }
 

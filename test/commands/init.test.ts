@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { lstat, readFile } from "node:fs/promises";
+import { lstat, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { initPlans } from "../../src/commands/init";
 import { readConfig } from "../../src/lib/config";
 import { GitPlumbing } from "../../src/lib/git";
+import { getGitCommonDir } from "../../src/lib/paths";
 import { createTestRepo, gitExec } from "../helpers";
 
 describe("initPlans", () => {
@@ -66,45 +67,45 @@ describe("initPlans", () => {
     }
   });
 
-  test("adds .plans to .gitignore (without trailing slash)", async () => {
+  test("adds .plans to info/exclude so it is ignored across all worktrees", async () => {
     const repo = await createTestRepo();
     try {
       await initPlans({ cwd: repo.dir });
 
-      const gitignore = await readFile(path.join(repo.dir, ".gitignore"), "utf8");
-      const lines = gitignore.split("\n").map((l) => l.trim());
+      const gitCommonDir = await getGitCommonDir(repo.dir);
+      const exclude = await readFile(path.join(gitCommonDir, "info", "exclude"), "utf8");
+      const lines = exclude.split("\n").map((l) => l.trim());
       expect(lines).toContain(".plans");
     } finally {
       await repo.cleanup();
     }
   });
 
-  test("replaces an existing .plans/ entry with .plans in .gitignore", async () => {
-    const repo = await createTestRepo();
-    try {
-      // Write an old-style entry.
-      await Bun.write(path.join(repo.dir, ".gitignore"), ".plans/\n");
-
-      await initPlans({ cwd: repo.dir });
-
-      const gitignore = await readFile(path.join(repo.dir, ".gitignore"), "utf8");
-      const lines = gitignore.split("\n").map((l) => l.trim());
-      expect(lines).toContain(".plans");
-      expect(lines).not.toContain(".plans/");
-    } finally {
-      await repo.cleanup();
-    }
-  });
-
-  test("does not duplicate .plans in .gitignore if already present", async () => {
+  test("does not duplicate .plans in info/exclude when init runs twice", async () => {
     const repo = await createTestRepo();
     try {
       await initPlans({ cwd: repo.dir });
       await initPlans({ cwd: repo.dir });
 
-      const gitignore = await readFile(path.join(repo.dir, ".gitignore"), "utf8");
-      const occurrences = gitignore.split("\n").filter((l) => l.trim() === ".plans").length;
+      const gitCommonDir = await getGitCommonDir(repo.dir);
+      const exclude = await readFile(path.join(gitCommonDir, "info", "exclude"), "utf8");
+      const occurrences = exclude.split("\n").filter((l) => l.trim() === ".plans").length;
       expect(occurrences).toBe(1);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("does not modify .gitignore", async () => {
+    const repo = await createTestRepo();
+    try {
+      const gitignorePath = path.join(repo.dir, ".gitignore");
+      await writeFile(gitignorePath, "node_modules\n.env\n");
+
+      await initPlans({ cwd: repo.dir });
+
+      const after = await readFile(gitignorePath, "utf8");
+      expect(after).toBe("node_modules\n.env\n");
     } finally {
       await repo.cleanup();
     }

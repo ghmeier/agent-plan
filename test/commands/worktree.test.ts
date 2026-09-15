@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { lstat } from "node:fs/promises";
+import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { addPlans } from "../../src/commands/add";
 import { commitPlans } from "../../src/commands/commit";
 import { listPlans } from "../../src/commands/ls";
+import { getConfigPath, getGitCommonDir } from "../../src/lib/paths";
+import { ensurePlansWorktree } from "../../src/lib/worktree";
 import {
   createSecondaryWorktree,
   createTestRepo,
@@ -139,6 +141,79 @@ describe("secondary worktree symlink", () => {
       expect(await file.text()).toBe("secondary content");
     } finally {
       await secondary.cleanup();
+      await repo.cleanup();
+    }
+  });
+});
+
+describe("config migration from old plain-directory .plans/", () => {
+  test("migrates branch and remote from .plans/config.json when new config location is empty", async () => {
+    const repo = await createTestRepo();
+    try {
+      // Simulate an old-style setup: a plain .plans/ directory with config.json inside.
+      const plansDir = join(repo.dir, ".plans");
+      await mkdir(plansDir, { recursive: true });
+      await writeFile(
+        join(plansDir, "config.json"),
+        JSON.stringify({ branch: "my-plans", remote: "upstream" }),
+      );
+
+      // ensurePlansWorktree (isInit=true) should migrate the config and replace
+      // the plain directory with a real worktree.
+      const config = { branch: "my-plans", remote: "upstream" };
+
+      // Create the branch first so the worktree add can check it out.
+      const { GitPlumbing } = await import("../../src/lib/git");
+      const git = new GitPlumbing(repo.dir, "my-plans");
+      await git.createOrphanBranch();
+
+      await ensurePlansWorktree(repo.dir, config, true);
+
+      // The new config location must contain the migrated values.
+      const gitCommonDir = await getGitCommonDir(repo.dir);
+      const newConfigPath = getConfigPath(gitCommonDir);
+      const raw = await readFile(newConfigPath, "utf8");
+      const migrated = JSON.parse(raw);
+      expect(migrated.branch).toBe("my-plans");
+      expect(migrated.remote).toBe("upstream");
+
+      // The plain directory is gone; .plans/ is now a real worktree.
+      const plansGit = await lstat(join(repo.dir, ".plans", ".git"));
+      expect(plansGit.isFile()).toBe(true);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("does not overwrite existing new-location config during migration", async () => {
+    const repo = await createTestRepo();
+    try {
+      // Write the new-location config first.
+      const gitCommonDir = await getGitCommonDir(repo.dir);
+      const newConfigPath = getConfigPath(gitCommonDir);
+      await mkdir(join(gitCommonDir, "agent-plan"), { recursive: true });
+      await writeFile(newConfigPath, JSON.stringify({ branch: "keep-me", remote: "origin" }));
+
+      // Set up an old-style .plans/ with different values.
+      const plansDir = join(repo.dir, ".plans");
+      await mkdir(plansDir, { recursive: true });
+      await writeFile(
+        join(plansDir, "config.json"),
+        JSON.stringify({ branch: "old-branch", remote: "old-remote" }),
+      );
+
+      const { GitPlumbing } = await import("../../src/lib/git");
+      const git = new GitPlumbing(repo.dir, "keep-me");
+      await git.createOrphanBranch();
+
+      await ensurePlansWorktree(repo.dir, { branch: "keep-me", remote: "origin" }, true);
+
+      // New-location config must be unchanged.
+      const raw = await readFile(newConfigPath, "utf8");
+      const saved = JSON.parse(raw);
+      expect(saved.branch).toBe("keep-me");
+      expect(saved.remote).toBe("origin");
+    } finally {
       await repo.cleanup();
     }
   });

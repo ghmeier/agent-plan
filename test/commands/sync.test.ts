@@ -110,6 +110,84 @@ describe("syncPlans", () => {
     }
   });
 
+  test("exits nonzero when fetch fails for a reason other than missing remote branch", async () => {
+    const repo = await createTestRepo();
+    try {
+      await initTestPlans(repo.dir);
+      // Point origin at a path that is not a git repository so fetch fails outright.
+      await gitExec(repo.dir, ["remote", "add", "origin", "/nonexistent/path/repo.git"]);
+
+      const prevExitCode = process.exitCode;
+      process.exitCode = 0;
+      await syncPlans({ cwd: repo.dir });
+
+      expect(process.exitCode).toBe(1);
+      process.exitCode = prevExitCode;
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("exits nonzero and does not print success when push fails", async () => {
+    const repo = await createTestRepo();
+    const bare = await createBareRemote();
+    try {
+      await initTestPlans(repo.dir);
+      await gitExec(repo.dir, ["remote", "add", "origin", bare.dir]);
+
+      // Sync once so the remote has the branch (fetch returns remoteHasBranch=true).
+      await syncPlans({ cwd: repo.dir });
+
+      // Write a new local commit so there is something new to push.
+      await writePlanFile(repo.dir, "new.md", "new content");
+
+      // Configure a separate push URL that does not exist. Git uses this URL
+      // for pushes while continuing to fetch from the real bare remote.
+      await gitExec(repo.dir, ["remote", "set-url", "--push", "origin", "/nonexistent/push.git"]);
+
+      const prevExitCode = process.exitCode;
+      process.exitCode = 0;
+      const logs: string[] = [];
+      const origLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+      try {
+        await syncPlans({ cwd: repo.dir });
+      } finally {
+        console.log = origLog;
+      }
+
+      expect(process.exitCode).toBe(1);
+      expect(logs.join("\n")).not.toContain("Synced plans");
+      process.exitCode = prevExitCode;
+    } finally {
+      await repo.cleanup();
+      await bare.cleanup();
+    }
+  });
+
+  test("sync succeeds when remote is given as a relative path", async () => {
+    const repo = await createTestRepo();
+    const bare = await createBareRemote();
+    try {
+      await initTestPlans(repo.dir);
+      // Use a relative URL — "../<dirname>" resolves from the repo root.
+      const relativeUrl = `../${bare.dir.split("/").at(-1)}`;
+      // Add the remote from within the repo so git records the URL as given.
+      await gitExec(repo.dir, ["remote", "add", "origin", bare.dir]);
+      // Overwrite with relative form to exercise relative-URL handling.
+      await gitExec(repo.dir, ["remote", "set-url", "origin", relativeUrl]);
+
+      // syncPlans must run fetch/push from repoRoot so the relative URL resolves.
+      await expect(syncPlans({ cwd: repo.dir })).resolves.toBeUndefined();
+
+      const branches = await gitExec(bare.dir, ["branch"]);
+      expect(branches).toContain("plans");
+    } finally {
+      await repo.cleanup();
+      await bare.cleanup();
+    }
+  });
+
   test("init from remote branch produces shared history so sync succeeds without divergence", async () => {
     // Regression: two independent `apl init` calls used to create unrelated orphan
     // commits whose timestamps differed. Push from the second repo would then fail

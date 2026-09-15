@@ -1,5 +1,3 @@
-import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig, writeConfig } from "../lib/config";
 import { NotARepoError } from "../lib/errors";
@@ -9,34 +7,6 @@ import { success } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 import { ensurePlansWorktree } from "../lib/worktree";
 import { DEFAULT_CONFIG } from "../types";
-
-async function ensureGitignoreEntry(repoRoot: string): Promise<void> {
-  const gitignorePath = join(repoRoot, ".gitignore");
-
-  let contents = "";
-  try {
-    contents = await readFile(gitignorePath, "utf8");
-  } catch {
-    contents = "";
-  }
-
-  const lines = contents.split("\n");
-
-  // Replace an existing `.plans/` entry with `.plans` (no trailing slash so
-  // git also ignores the symlink that secondary worktrees create).
-  const replaced = lines.map((l) => (l.trim() === ".plans/" ? ".plans" : l));
-
-  if (replaced.some((l) => l.trim() === ".plans")) {
-    if (replaced.join("\n") !== lines.join("\n")) {
-      await writeFile(gitignorePath, replaced.join("\n"));
-    }
-    return;
-  }
-
-  // Not present at all — append.
-  const prefix = contents.length === 0 || contents.endsWith("\n") ? "" : "\n";
-  await writeFile(gitignorePath, `${contents}${prefix}.plans\n`);
-}
 
 export async function initPlans(
   options: { branch?: string; cwd?: string; autoCommit?: boolean } = {},
@@ -76,7 +46,6 @@ export async function initPlans(
   await ensurePlansWorktree(repoRoot, { branch, remote }, true);
 
   await writeConfig(repoRoot, { branch, remote });
-  await ensureGitignoreEntry(repoRoot);
 
   if (options.autoCommit === true) {
     await installAutoCommitHook(repoRoot);
