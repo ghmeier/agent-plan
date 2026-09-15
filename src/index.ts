@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Command } from "commander";
+import pkg from "../package.json" with { type: "json" };
 import { registerAdd } from "./commands/add";
 import { registerCommit } from "./commands/commit";
 import { registerDiff } from "./commands/diff";
@@ -16,7 +17,7 @@ const program = new Command();
 program
   .name("apl")
   .description("Version-controlled storage and syncing for plan files")
-  .version("0.1.0")
+  .version(pkg.version)
   .option("--no-color", "Disable colored output");
 
 program.hook("preAction", (thisCommand) => {

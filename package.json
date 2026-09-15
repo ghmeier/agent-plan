@@ -1,18 +1,32 @@
 {
   "name": "agent-plan",
+  "version": "0.1.0",
+  "description": "Version-controlled plan storage for agent-driven coding workflows, without cluttering your main repo.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ghmeier/agent-plan.git"
+  },
   "module": "src/index.ts",
   "type": "module",
-  "private": true,
   "bin": {
     "agent-plan": "src/index.ts",
     "apl": "src/index.ts"
   },
+  "files": [
+    "src",
+    "package.json",
+    "README.md"
+  ],
   "scripts": {
     "test": "bun test",
     "start": "bun run src/index.ts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "bun build src/index.ts --compile --outfile dist/apl",
+    "build:all": "bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile dist/apl-darwin-arm64 && bun build src/index.ts --compile --target=bun-darwin-x64 --outfile dist/apl-darwin-x64 && bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/apl-linux-x64",
+    "prepublishOnly": "bun run typecheck && bun run lint && bun test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",

@@ -133,3 +133,25 @@ bun run lint        # lint and format check (Biome)
 bun run lint:fix    # auto-fix lint and formatting issues
 bun run src/index.ts --help
 ```
+
+## Install / Build
+
+For local development, link the CLI globally with Bun:
+
+```bash
+bun link
+apl --help
+```
+
+To produce a standalone binary that runs without Bun installed:
+
+```bash
+bun run build          # compiles dist/apl for the current platform
+./dist/apl --help
+```
+
+To cross-compile binaries for macOS (arm64, x64) and Linux (x64) in one step:
+
+```bash
+bun run build:all      # writes dist/apl-darwin-arm64, dist/apl-darwin-x64, dist/apl-linux-x64
+```
