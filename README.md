@@ -58,22 +58,27 @@ Worktree mode only: stages and commits changes made directly in `.plans/`. Witho
 apl commit -m "Update plan after review"
 ```
 
-### `apl show <path> [--version <ref>] [--json]`
+### `apl show <path> [--version <ref>] [--json] [--raw]`
 
-Prints the contents of a plan file. Use `--version` to view a historical revision.
+Prints the contents of a plan file. Frontmatter fields are shown in a header block above the body. Use `--raw` to print the file exactly as stored (including the frontmatter fences). Use `--version` to view a historical revision.
 
 ```bash
 apl show plan.md
+apl show plan.md --raw
 apl show plan.md --version HEAD~2
 ```
 
-### `apl ls [path] [--json]`
+### `apl ls [path] [--json] [--short] [--status <status>] [--tag <tag>]`
 
-Lists plan files, optionally under a subdirectory.
+Lists plan files, optionally under a subdirectory. The default output is a table showing filename, title, status, and tags. Use `--short` for the original filename-only output. Use `--status` and `--tag` to filter results (filters combine with AND).
 
 ```bash
 apl ls
 apl ls research/
+apl ls --short
+apl ls --status active
+apl ls --tag cli
+apl ls --status active --tag cli
 ```
 
 ### `apl log [file] [-n <limit>] [--json]`
@@ -99,6 +104,32 @@ Fetches and fast-forwards the local plans ref, then pushes. Skips gracefully if 
 ```bash
 apl sync
 ```
+
+## Frontmatter Metadata
+
+Plan files can include optional YAML frontmatter for richer display and filtering:
+
+```markdown
+---
+title: My Feature Plan
+status: active
+tags: [cli, backend]
+created: 2026-09-01
+updated: 2026-09-15
+---
+
+# Plan content here...
+```
+
+Supported fields:
+
+- **title**: Short display name shown in `apl ls` output
+- **status**: One of `draft`, `active`, `completed`, `archived`
+- **tags**: Array of free-form strings for categorization
+- **created**: ISO date, auto-set on first `apl add`
+- **updated**: ISO date, auto-set on every `apl add` and `apl commit`
+
+Files without frontmatter work exactly as they do without it. Timestamps are only injected into files that already have a frontmatter block.
 
 ## How It Works
 

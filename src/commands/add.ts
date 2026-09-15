@@ -2,6 +2,7 @@ import path from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { FileNotFoundError, NotInitializedError } from "../lib/errors";
+import { stampTimestamps } from "../lib/frontmatter";
 import { GitPlumbing } from "../lib/git";
 import { success } from "../lib/output";
 import { findRepoRoot, resolvePlanPath } from "../lib/paths";
@@ -36,7 +37,8 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
       throw new FileNotFoundError(file);
     }
 
-    const content = await diskFile.text();
+    const rawContent = await diskFile.text();
+    const content = stampTimestamps(rawContent);
     const planPath = resolvePlanPath(repoRoot, absolutePath);
     resolved.push({ path: planPath, content });
   }

@@ -52,7 +52,16 @@ export async function syncPlans(options: SyncOptions = {}): Promise<void> {
     if (isAncestor) {
       await git.exec(["update-ref", `refs/heads/${config.branch}`, remoteRef]);
     } else {
-      warn("Local plans have diverged from remote, push may fail");
+      // When histories are unrelated (e.g. a freshly-initialized orphan branch
+      // that has never shared an ancestor with the remote), check whether the
+      // local branch actually carries any files. An empty local branch can be
+      // safely reset to the remote without losing work.
+      const localFiles = await git.listFiles();
+      if (localFiles.length === 0) {
+        await git.exec(["update-ref", `refs/heads/${config.branch}`, remoteRef]);
+      } else {
+        warn("Local plans have diverged from remote, push may fail");
+      }
     }
   }
 
