@@ -64,7 +64,7 @@ export function registerInit(program: Command): void {
   program
     .command("init")
     .description("Initialize plan storage in the current repository")
-    .option("--branch <name>", "Branch name for plan storage", "plans")
+    .option("--branch <name>", "Branch name for plan storage (default: plans)")
     .option("--auto-commit", "Install a post-commit hook that auto-commits plan changes")
     .option("--no-auto-commit", "Remove the auto-commit hook if one is installed")
     .action(async (opts) => {
