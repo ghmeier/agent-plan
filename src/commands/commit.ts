@@ -4,8 +4,8 @@ import { info, success } from "../lib/output";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
 
 const PLACEHOLDER_MESSAGE =
-  "Nothing to commit. Use 'plan add <file>' to add files to plans.\n" +
-  "In worktree mode, 'plan commit' commits all changes in .plans/";
+  "Nothing to commit. Use 'apl add <file>' to add files to plans.\n" +
+  "In worktree mode, 'apl commit' commits all changes in .plans/";
 
 async function run(args: string[], cwd: string): Promise<{ exitCode: number }> {
   const proc = Bun.spawn(["git", ...args], {
@@ -18,9 +18,7 @@ async function run(args: string[], cwd: string): Promise<{ exitCode: number }> {
   return { exitCode };
 }
 
-export async function commitPlans(
-  options: { message?: string; cwd?: string } = {},
-): Promise<void> {
+export async function commitPlans(options: { message?: string; cwd?: string } = {}): Promise<void> {
   const repoRoot = await findRepoRoot(options.cwd);
   const config = await readConfig(repoRoot);
 

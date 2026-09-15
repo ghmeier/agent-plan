@@ -1,4 +1,4 @@
-import { describe, expect, test, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +8,7 @@ import { DEFAULT_CONFIG, type PlanConfig } from "../../src/types";
 const tempDirs: string[] = [];
 
 async function makeTempRepo(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "plan-storage-config-"));
+  const dir = await mkdtemp(join(tmpdir(), "agent-plan-config-"));
   tempDirs.push(dir);
   return dir;
 }

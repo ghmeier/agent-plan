@@ -16,17 +16,17 @@ export const colors = {
 };
 
 export function success(msg: string): void {
-  console.log(colors.green("✓") + " " + msg);
+  console.log(`${colors.green("✓")} ${msg}`);
 }
 
 export function error(msg: string): void {
-  console.error(colors.red("✗") + " " + msg);
+  console.error(`${colors.red("✗")} ${msg}`);
 }
 
 export function warn(msg: string): void {
-  console.log(colors.yellow("⚠") + " " + msg);
+  console.log(`${colors.yellow("⚠")} ${msg}`);
 }
 
 export function info(msg: string): void {
-  console.log(colors.dim("ℹ") + " " + msg);
+  console.log(`${colors.dim("ℹ")} ${msg}`);
 }

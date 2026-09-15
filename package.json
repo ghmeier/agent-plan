@@ -1,20 +1,25 @@
 {
-  "name": "plan-storage",
+  "name": "agent-plan",
   "module": "src/index.ts",
   "type": "module",
   "private": true,
   "bin": {
-    "plan": "src/index.ts"
+    "agent-plan": "src/index.ts",
+    "apl": "src/index.ts"
   },
   "scripts": {
     "test": "bun test",
-    "start": "bun run src/index.ts"
+    "start": "bun run src/index.ts",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.13",
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^7"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "commander": "^15.0.0"

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getPlanLog } from "../../src/commands/log";
 import { diffPlan } from "../../src/commands/diff";
+import { getPlanLog } from "../../src/commands/log";
 import { listPlans } from "../../src/commands/ls";
 import { showPlan } from "../../src/commands/show";
 import { GitPlumbing } from "../../src/lib/git";
@@ -31,7 +31,7 @@ describe("read commands", () => {
 
   test("show with --version returns historical content", async () => {
     const oldLog = await git.getLog("plan.md");
-    const oldVersion = oldLog[0].hash;
+    const oldVersion = oldLog[0]?.hash;
 
     await git.writeFiles([{ path: "plan.md", content: "# Updated Plan\n" }], "Update plan");
 
@@ -55,10 +55,7 @@ describe("read commands", () => {
   });
 
   test("ls with subdirectory scope works", async () => {
-    await git.writeFiles(
-      [{ path: "research/notes.md", content: "notes" }],
-      "Add research notes",
-    );
+    await git.writeFiles([{ path: "research/notes.md", content: "notes" }], "Add research notes");
 
     const files = await listPlans("research", repo.dir);
 
@@ -69,9 +66,11 @@ describe("read commands", () => {
     const entries = await getPlanLog(undefined, 20, repo.dir);
 
     expect(entries.length).toBe(2);
-    expect(entries[0].message).toBe("Add plan");
-    expect(entries[0].hash).toMatch(/^[0-9a-f]{40}$/);
-    expect(new Date(entries[0].date).toString()).not.toBe("Invalid Date");
+    const entry = entries[0];
+    if (!entry) throw new Error("Expected at least one log entry");
+    expect(entry.message).toBe("Add plan");
+    expect(entry.hash).toMatch(/^[0-9a-f]{40}$/);
+    expect(new Date(entry.date).toString()).not.toBe("Invalid Date");
   });
 
   test("log with file filter only shows commits for that file", async () => {
@@ -89,7 +88,9 @@ describe("read commands", () => {
     const entries = await getPlanLog(undefined, 1, repo.dir);
 
     expect(entries.length).toBe(1);
-    expect(entries[0].message).toBe("Update plan again");
+    const entry = entries[0];
+    if (!entry) throw new Error("Expected a log entry");
+    expect(entry.message).toBe("Update plan again");
   });
 
   test("diff shows changes between local file and plans branch version", async () => {

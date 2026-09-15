@@ -16,7 +16,11 @@ async function createTestRepo() {
 async function commitOnMain(dir: string) {
   await writeFile(join(dir, "PLAN.md"), "# main plan\n");
   await Bun.spawn(["git", "add", "PLAN.md"], { cwd: dir }).exited;
-  const proc = Bun.spawn(["git", "commit", "-m", "Add PLAN.md"], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["git", "commit", "-m", "Add PLAN.md"], {
+    cwd: dir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   await proc.exited;
 }
 
@@ -50,12 +54,20 @@ describe("GitPlumbing", () => {
     const files = await git.listFiles();
     expect(files).toEqual([]);
 
-    const mainProc = Bun.spawn(["git", "log", "--oneline", "main"], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+    const mainProc = Bun.spawn(["git", "log", "--oneline", "main"], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     const mainLog = await new Response(mainProc.stdout).text();
     await mainProc.exited;
     expect(mainLog).toContain("Add PLAN.md");
 
-    const plansProc = Bun.spawn(["git", "log", "--oneline", "plans"], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+    const plansProc = Bun.spawn(["git", "log", "--oneline", "plans"], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     const plansLog = await new Response(plansProc.stdout).text();
     await plansProc.exited;
     expect(plansLog).not.toContain("Add PLAN.md");
@@ -127,9 +139,11 @@ describe("GitPlumbing", () => {
     const log = await git.getLog();
 
     expect(log.length).toBe(3);
-    expect(log[0].message).toBe("Second commit");
-    expect(log[1].message).toBe("First commit");
-    expect(log[2].message).toBe("Initialize plans");
+    const [first, second, third] = log;
+    if (!first || !second || !third) throw new Error("Expected 3 log entries");
+    expect(first.message).toBe("Second commit");
+    expect(second.message).toBe("First commit");
+    expect(third.message).toBe("Initialize plans");
 
     for (const entry of log) {
       expect(entry.hash).toMatch(/^[0-9a-f]{40}$/);
@@ -158,7 +172,9 @@ describe("GitPlumbing", () => {
     const log = await git.getLog(undefined, 1);
 
     expect(log.length).toBe(1);
-    expect(log[0].message).toBe("Second");
+    const [first] = log;
+    if (!first) throw new Error("Expected a log entry");
+    expect(first.message).toBe("Second");
   });
 
   test("readFile on nonexistent file throws", async () => {

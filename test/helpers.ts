@@ -1,7 +1,7 @@
+import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
 
 export interface TestRepo {
   dir: string;
@@ -25,11 +25,7 @@ export async function gitExec(dir: string, args: string[]): Promise<string> {
     child.on("error", reject);
     child.on("close", (code) => {
       if (code !== 0) {
-        reject(
-          new Error(
-            `git ${args.join(" ")} exited with code ${code}: ${stderr}`,
-          ),
-        );
+        reject(new Error(`git ${args.join(" ")} exited with code ${code}: ${stderr}`));
         return;
       }
       resolve(stdout.trim());
@@ -44,7 +40,7 @@ export async function gitExec(dir: string, args: string[]): Promise<string> {
  * temporary directory once the test is done.
  */
 export async function createTestRepo(): Promise<TestRepo> {
-  const dir = await mkdtemp(path.join(tmpdir(), "plan-storage-test-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "agent-plan-test-"));
 
   await gitExec(dir, ["init"]);
   await gitExec(dir, ["config", "user.email", "test@test.com"]);

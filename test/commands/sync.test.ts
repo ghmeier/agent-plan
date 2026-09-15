@@ -13,7 +13,7 @@ async function initPlansBranch(dir: string): Promise<GitPlumbing> {
 }
 
 async function createBareRemote(): Promise<{ dir: string; cleanup: () => Promise<void> }> {
-  const dir = await mkdtemp(join(tmpdir(), "plan-storage-bare-"));
+  const dir = await mkdtemp(join(tmpdir(), "agent-plan-bare-"));
   await gitExec(dir, ["init", "--bare"]);
   return {
     dir,

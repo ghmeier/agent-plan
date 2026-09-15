@@ -11,8 +11,8 @@ import { createTestRepo, type TestRepo } from "../helpers";
 function captureStdout(fn: () => Promise<void>): Promise<string> {
   const originalLog = console.log;
   let output = "";
-  console.log = (...args: any[]) => {
-    output += args.join(" ") + "\n";
+  console.log = (...args: unknown[]) => {
+    output += `${args.join(" ")}\n`;
   };
   return fn()
     .then(() => {

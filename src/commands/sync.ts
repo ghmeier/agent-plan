@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { NotInitializedError } from "../lib/errors";
 import { GitPlumbing } from "../lib/git";
-import { error as logError, info, success, warn } from "../lib/output";
+import { info, error as logError, success, warn } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 
 export interface SyncOptions {

@@ -1,4 +1,4 @@
-# plan-storage
+# agent-plan
 
 Version-controlled plan storage for agent-driven coding workflows, without cluttering your main repo.
 
@@ -6,31 +6,31 @@ Version-controlled plan storage for agent-driven coding workflows, without clutt
 
 ```bash
 # Install
-npm install -g plan-storage
+npm install -g agent-plan
 # or run directly
-npx plan-storage
+npx agent-plan
 
 # Initialize in your repo
-plan init
+apl init
 
 # Add a plan file
-plan add plan.md
+apl add plan.md
 
 # View plans
-plan ls
-plan show plan.md
+apl ls
+apl show plan.md
 
 # Sync with teammates
-plan sync
+apl sync
 ```
 
 ## Why?
 
-AI coding workflows generate a steady stream of research docs, plans, and handoffs. Committing them to your main repo creates churn and review burden on files that are just markdown. Keeping them local means they can't be shared with teammates or survive a fresh clone. plan-storage solves this by storing plans on a separate git branch with its own history, synced with a single command, so there's never a question of whether or how to commit a plan file.
+AI coding workflows generate a steady stream of research docs, plans, and handoffs. Committing them to your main repo creates churn and review burden on files that are just markdown. Keeping them local means they can't be shared with teammates or survive a fresh clone. agent-plan solves this by storing plans on a separate git branch with its own history, synced with a single command, so there's never a question of whether or how to commit a plan file.
 
 ## Commands
 
-### `plan init [--branch <name>] [--worktree] [--auto-commit]`
+### `apl init [--branch <name>] [--worktree] [--auto-commit]`
 
 Initializes plan storage in the current repo. Creates the orphan branch (default: `plans`) if it doesn't exist, and writes `.plans/config.json`.
 
@@ -39,65 +39,65 @@ Initializes plan storage in the current repo. Creates the orphan branch (default
 - `--auto-commit`: install a git hook that commits worktree changes automatically
 
 ```bash
-plan init --branch plans --worktree --auto-commit
+apl init --branch plans --worktree --auto-commit
 ```
 
-### `plan add <file> [files...] [-m <message>]`
+### `apl add <file> [files...] [-m <message>]`
 
 Writes one or more files to the plans branch and commits immediately.
 
 ```bash
-plan add research.md plan.md -m "Add auth research and plan"
+apl add research.md plan.md -m "Add auth research and plan"
 ```
 
-### `plan commit [-m <message>]`
+### `apl commit [-m <message>]`
 
-Worktree mode only: stages and commits changes made directly in `.plans/`. Without worktree mode, this is a no-op that points you to `plan add`.
+Worktree mode only: stages and commits changes made directly in `.plans/`. Without worktree mode, this is a no-op that points you to `apl add`.
 
 ```bash
-plan commit -m "Update plan after review"
+apl commit -m "Update plan after review"
 ```
 
-### `plan show <path> [--version <ref>] [--json]`
+### `apl show <path> [--version <ref>] [--json]`
 
 Prints the contents of a plan file. Use `--version` to view a historical revision.
 
 ```bash
-plan show plan.md
-plan show plan.md --version HEAD~2
+apl show plan.md
+apl show plan.md --version HEAD~2
 ```
 
-### `plan ls [path] [--json]`
+### `apl ls [path] [--json]`
 
 Lists plan files, optionally under a subdirectory.
 
 ```bash
-plan ls
-plan ls research/
+apl ls
+apl ls research/
 ```
 
-### `plan log [file] [-n <limit>] [--json]`
+### `apl log [file] [-n <limit>] [--json]`
 
 Shows commit history for all plans, or for a single file.
 
 ```bash
-plan log plan.md -n 5
+apl log plan.md -n 5
 ```
 
-### `plan diff <file> [--json]`
+### `apl diff <file> [--json]`
 
 Diffs a local file against its last-committed version on the plans branch.
 
 ```bash
-plan diff plan.md
+apl diff plan.md
 ```
 
-### `plan sync`
+### `apl sync`
 
 Fetches and fast-forwards the local plans ref, then pushes. Skips gracefully if no remote is configured.
 
 ```bash
-plan sync
+apl sync
 ```
 
 ## How It Works
@@ -106,21 +106,21 @@ Plans live on an independent orphan branch (default: `plans`) with its own commi
 
 ## Worktree Mode
 
-`plan init --worktree` checks out the plans branch into a `.plans/` directory, so agents and editors can read and write plan files with normal file I/O instead of going through the CLI. `plan commit` then stages and commits whatever changed in `.plans/`, same as a regular git commit.
+`apl init --worktree` checks out the plans branch into a `.plans/` directory, so agents and editors can read and write plan files with normal file I/O instead of going through the CLI. `apl commit` then stages and commits whatever changed in `.plans/`, same as a regular git commit.
 
 ## Agent Integration
 
 - **Structured output**: every read command (`show`, `ls`, `log`, `diff`) supports `--json` for scripting and parsing.
 - **Normal file I/O**: worktree mode lets agents read and write plan files directly instead of shelling out to the CLI for every edit.
-- **Automatic sync**: the auto-commit hook (`plan init --auto-commit`) keeps `.plans/` committed without a separate step.
+- **Automatic sync**: the auto-commit hook (`apl init --auto-commit`) keeps `.plans/` committed without a separate step.
 
 Example agent workflow:
 
 ```bash
-plan init --worktree --auto-commit
+apl init --worktree --auto-commit
 # agent writes /.plans/plan.md directly with normal file tools
-plan sync                    # push to remote so teammates see it
-plan show plan.md --json     # read back structured plan state later
+apl sync                    # push to remote so teammates see it
+apl show plan.md --json     # read back structured plan state later
 ```
 
 ## Development
@@ -128,5 +128,8 @@ plan show plan.md --json     # read back structured plan state later
 ```bash
 bun install
 bun test
+bun run typecheck   # type-check all source and test files
+bun run lint        # lint and format check (Biome)
+bun run lint:fix    # auto-fix lint and formatting issues
 bun run src/index.ts --help
 ```

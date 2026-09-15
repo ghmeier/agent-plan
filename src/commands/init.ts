@@ -1,4 +1,4 @@
-import { readFile, writeFile, rm, realpath } from "node:fs/promises";
+import { readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig, writeConfig } from "../lib/config";

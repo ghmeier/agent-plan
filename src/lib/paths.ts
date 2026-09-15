@@ -1,5 +1,5 @@
-import path from "node:path";
 import { stat } from "node:fs/promises";
+import path from "node:path";
 
 async function exists(candidate: string): Promise<boolean> {
   try {
@@ -20,9 +20,7 @@ export async function findRepoRoot(startDir?: string): Promise<string> {
 
     const parent = path.dirname(dir);
     if (parent === dir) {
-      throw new Error(
-        "Not a git repository (or any parent up to mount point)",
-      );
+      throw new Error("Not a git repository (or any parent up to mount point)");
     }
 
     dir = parent;

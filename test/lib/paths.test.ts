@@ -1,5 +1,5 @@
-import { describe, expect, test, afterEach } from "bun:test";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findRepoRoot, resolvePlanPath } from "../../src/lib/paths";
@@ -7,7 +7,7 @@ import { findRepoRoot, resolvePlanPath } from "../../src/lib/paths";
 const tempDirs: string[] = [];
 
 async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "plan-storage-paths-"));
+  const dir = await mkdtemp(join(tmpdir(), "agent-plan-paths-"));
   tempDirs.push(dir);
   return dir;
 }
@@ -57,15 +57,11 @@ describe("resolvePlanPath", () => {
   });
 
   test("makes an absolute path relative to the repo root", () => {
-    expect(resolvePlanPath(repoRoot, "/repo/root/notes/plan.md")).toBe(
-      "notes/plan.md",
-    );
+    expect(resolvePlanPath(repoRoot, "/repo/root/notes/plan.md")).toBe("notes/plan.md");
   });
 
   test("strips a leading ./ and /", () => {
-    expect(resolvePlanPath(repoRoot, "./notes/plan.md")).toBe(
-      "notes/plan.md",
-    );
+    expect(resolvePlanPath(repoRoot, "./notes/plan.md")).toBe("notes/plan.md");
     expect(resolvePlanPath(repoRoot, "/notes/plan.md")).toBe("notes/plan.md");
   });
 });

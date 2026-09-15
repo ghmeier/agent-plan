@@ -46,6 +46,8 @@ export class GitPlumbing {
     });
 
     if (opts.input !== undefined) {
+      // stdin is a pipe because we set `stdin: "pipe"` above when input is defined.
+      if (!proc.stdin) throw new Error("Expected stdin pipe");
       proc.stdin.write(opts.input);
       proc.stdin.end();
     }
@@ -104,7 +106,7 @@ export class GitPlumbing {
    * automatically by write-tree.
    */
   async writeFiles(files: { path: string; content: string }[], message: string): Promise<void> {
-    const tempIndex = join(tmpdir(), `plan-storage-index-${randomUUID()}`);
+    const tempIndex = join(tmpdir(), `agent-plan-index-${randomUUID()}`);
     const env = { GIT_INDEX_FILE: tempIndex };
 
     try {
@@ -118,10 +120,9 @@ export class GitPlumbing {
           input: file.content,
         });
         const hash = hashOut.trim();
-        await this.run(
-          ["update-index", "--add", "--cacheinfo", `100644,${hash},${file.path}`],
-          { env },
-        );
+        await this.run(["update-index", "--add", "--cacheinfo", `100644,${hash},${file.path}`], {
+          env,
+        });
       }
 
       const { stdout: treeOut } = await this.run(["write-tree"], { env });
@@ -157,15 +158,20 @@ export class GitPlumbing {
       .map((record) => record.trim())
       .filter((record) => record.length > 0)
       .map((record) => {
-        const [hash, message, date, author] = record.split(LOG_FIELD_SEP);
-        return { hash, message, date, author };
+        const parts = record.split(LOG_FIELD_SEP);
+        return {
+          hash: parts[0] ?? "",
+          message: parts[1] ?? "",
+          date: parts[2] ?? "",
+          author: parts[3] ?? "",
+        };
       });
   }
 
   /** Diff a local file on disk against its counterpart on the plans branch. */
   async diff(planPath: string, localFilePath: string): Promise<string> {
     const branchContent = await this.readFile(planPath);
-    const tempFile = join(tmpdir(), `plan-storage-diff-${randomUUID()}`);
+    const tempFile = join(tmpdir(), `agent-plan-diff-${randomUUID()}`);
 
     try {
       await Bun.write(tempFile, branchContent);

@@ -1,20 +1,20 @@
 #!/usr/bin/env bun
 import { Command } from "commander";
-import { registerInit } from "./commands/init";
 import { registerAdd } from "./commands/add";
 import { registerCommit } from "./commands/commit";
-import { registerSync } from "./commands/sync";
-import { registerLog } from "./commands/log";
-import { registerShow } from "./commands/show";
-import { registerLs } from "./commands/ls";
 import { registerDiff } from "./commands/diff";
-import { PlanStorageError } from "./lib/errors";
+import { registerInit } from "./commands/init";
+import { registerLog } from "./commands/log";
+import { registerLs } from "./commands/ls";
+import { registerShow } from "./commands/show";
+import { registerSync } from "./commands/sync";
+import { AgentPlanError } from "./lib/errors";
 import { error } from "./lib/output";
 
 const program = new Command();
 
 program
-  .name("plan")
+  .name("apl")
   .description("Version-controlled storage and syncing for plan files")
   .version("0.1.0")
   .option("--no-color", "Disable colored output");
@@ -35,7 +35,7 @@ registerLs(program);
 registerDiff(program);
 
 program.parseAsync().catch((err) => {
-  if (err instanceof PlanStorageError) {
+  if (err instanceof AgentPlanError) {
     error(err.message);
     process.exit(err.exitCode);
   }

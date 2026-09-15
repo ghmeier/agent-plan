@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestRepo } from "../helpers";
-import { GitPlumbing } from "../../src/lib/git";
-import { readConfig } from "../../src/lib/config";
-import { initPlans } from "../../src/commands/init";
 import { commitPlans } from "../../src/commands/commit";
+import { initPlans } from "../../src/commands/init";
+import { readConfig } from "../../src/lib/config";
+import { GitPlumbing } from "../../src/lib/git";
+import { createTestRepo } from "../helpers";
 
 describe("init --worktree", () => {
   test("creates .plans/ as a git worktree", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import path from "node:path";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { initPlans } from "../../src/commands/init";
 import { readConfig } from "../../src/lib/config";
 import { GitPlumbing } from "../../src/lib/git";
