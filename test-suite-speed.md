@@ -50,8 +50,8 @@ Every test calls `createTestRepo()` which spawns 5 git subprocesses (`git init`,
 
 ### Wave 1: Template repo in helpers.ts
 
-- [x] Add a module-level template-repo promise in `test/helpers.ts` that creates one git repo per bun-test worker (one per file), runs the five `createTestRepo` git calls once, then freezes it as read-only.
-- [x] Rewrite `createTestRepo()` to copy the template with `cp -r` instead of spawning git. A standard `cp -r` on APFS is copy-on-write and takes <5 ms.
+- [x] Add a module-level template-repo promise in `test/helpers.ts` that creates one git repo per `bun test` run (all files share one process), runs the five `createTestRepo` git calls once, and is copied for every test. A preload file (`test/setup.ts`, registered in `bunfig.toml`) removes the templates in a global `afterAll`, because `process.on("exit")` handlers don't fire under `bun test`.
+- [x] Rewrite `createTestRepo()` to copy the template with `fs.cp` instead of spawning git.
 - [x] Add `GIT_CONFIG_NOSYSTEM=1` and `GIT_TERMINAL_PROMPT=0` to every `gitExec` call in `helpers.ts` to skip reading `/etc/gitconfig` and suppress any interactive prompts.
 
 ### Wave 2: Template repo with plans branch
