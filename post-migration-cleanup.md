@@ -1,6 +1,6 @@
 ---
 title: Post-Migration Cleanup
-status: active
+status: completed
 tags:
   - cleanup
   - completion
