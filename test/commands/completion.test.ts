@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { printCompletion } from "../../src/commands/completion";
-import { createTestRepo, initTestPlans, writePlanFile } from "../helpers";
+import { createTestRepoWithPlans, writePlanFile } from "../helpers";
 
 // Capture stdout lines emitted by printCompletion.
 async function captureScript(shell: "bash" | "zsh" | "fish"): Promise<string> {
@@ -279,8 +279,7 @@ async function writeAplShim(dir: string): Promise<void> {
 // Provisions a repo with plans initialized and a couple of tagged, statused
 // plan files, plus a PATH-only directory holding the `apl` shim.
 async function createShellFixture(): Promise<ShellFixture> {
-  const repo = await createTestRepo();
-  await initTestPlans(repo.dir);
+  const repo = await createTestRepoWithPlans();
   await writePlanFile(
     repo.dir,
     "alpha.md",

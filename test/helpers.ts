@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdtempSync } from "node:fs";
+import { cp, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { initPlans } from "../src/commands/init";
@@ -9,6 +10,13 @@ export interface TestRepo {
   cleanup: () => Promise<void>;
 }
 
+// Environment variables that skip slow per-call git overhead.
+const GIT_ENV = {
+  ...process.env,
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_TERMINAL_PROMPT: "0",
+};
+
 /**
  * Runs a git command in the given directory and returns its stdout.
  * Throws if the command exits with a non-zero status, including stderr
@@ -16,7 +24,7 @@ export interface TestRepo {
  */
 export async function gitExec(dir: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn("git", args, { cwd: dir });
+    const child = spawn("git", args, { cwd: dir, env: GIT_ENV });
 
     let stdout = "";
     let stderr = "";
@@ -35,21 +43,96 @@ export async function gitExec(dir: string, args: string[]): Promise<string> {
 }
 
 /**
+ * Templates are built once per `bun test` run and copied for every test, so
+ * the git setup cost is paid once instead of once per test. `bun test` loads
+ * this module once for all test files; `test/setup.ts` removes the templates
+ * after the whole run because `process.on("exit")` handlers don't fire there.
+ */
+const templateRoot = mkdtempSync(join(tmpdir(), "agent-plan-tpl-"));
+
+export async function removeTestTemplates(): Promise<void> {
+  await rm(templateRoot, { recursive: true, force: true });
+}
+
+const baseTemplatePromise: Promise<string> = (async () => {
+  const dir = join(templateRoot, "base");
+  await mkdir(dir);
+
+  await gitExec(dir, ["init", "-b", "main"]);
+  await gitExec(dir, ["config", "user.email", "test@test.com"]);
+  await gitExec(dir, ["config", "user.name", "Test"]);
+
+  await Bun.write(join(dir, ".gitkeep"), "");
+  await gitExec(dir, ["add", ".gitkeep"]);
+  await gitExec(dir, ["commit", "-m", "Initial commit"]);
+
+  return dir;
+})();
+
+const plansTemplatePromise: Promise<string> = (async () => {
+  const dir = join(templateRoot, "plans");
+  await cp(await baseTemplatePromise, dir, { recursive: true });
+
+  await initPlans({ cwd: dir });
+
+  return dir;
+})();
+
+/**
+ * A copied repo's `.plans/` worktree still points at the template through two
+ * absolute paths: `.plans/.git` names the admin dir under `.git/worktrees/`,
+ * and that admin dir's `gitdir` file names `.plans/.git`. Git derives the
+ * admin dir's name from the worktree path, so it is read back rather than
+ * assumed.
+ */
+async function repairWorktreePaths(dir: string): Promise<void> {
+  // realpath resolves macOS /var to /private/var, matching what git stores.
+  const real = await realpath(dir);
+  const pointerPath = join(dir, ".plans", ".git");
+  const pointer = await Bun.file(pointerPath).text();
+  const adminDirName = path.basename(pointer.replace(/^gitdir:\s*/, "").trim());
+
+  await Bun.write(pointerPath, `gitdir: ${real}/.git/worktrees/${adminDirName}\n`);
+  await Bun.write(join(dir, ".git", "worktrees", adminDirName, "gitdir"), `${real}/.plans/.git\n`);
+}
+
+/**
  * Provisions an isolated git repository in a temporary directory, with an
  * initial commit so the repo is non-empty and ready for further commits.
  * Callers must invoke the returned `cleanup` function to remove the
  * temporary directory once the test is done.
  */
 export async function createTestRepo(): Promise<TestRepo> {
-  const dir = await mkdtemp(path.join(tmpdir(), "agent-plan-test-"));
+  const template = await baseTemplatePromise;
 
-  await gitExec(dir, ["init"]);
-  await gitExec(dir, ["config", "user.email", "test@test.com"]);
-  await gitExec(dir, ["config", "user.name", "Test"]);
+  const dir = await mkdtemp(join(tmpdir(), "agent-plan-test-"));
+  await cp(template, dir, { recursive: true });
 
-  await Bun.write(path.join(dir, ".gitkeep"), "");
-  await gitExec(dir, ["add", ".gitkeep"]);
-  await gitExec(dir, ["commit", "-m", "Initial commit"]);
+  const cleanup = async () => {
+    await rm(dir, { recursive: true, force: true });
+  };
+
+  return { dir, cleanup };
+}
+
+/**
+ * Provisions an isolated git repository that already has plan storage
+ * initialized: a `plans` orphan branch and a `.plans/` worktree. Equivalent
+ * to `createTestRepo()` followed by `initTestPlans()`, but uses a pre-built
+ * template so the per-test cost is a file copy rather than ~10 git subprocess
+ * calls.
+ *
+ * Use this in tests that exercise commands which require an initialized repo.
+ * Leave `createTestRepo()` + `initTestPlans()` in tests that exercise `init`
+ * itself, since those tests care about the initialization side-effects.
+ */
+export async function createTestRepoWithPlans(): Promise<TestRepo> {
+  const template = await plansTemplatePromise;
+
+  const dir = await mkdtemp(join(tmpdir(), "agent-plan-test-"));
+  await cp(template, dir, { recursive: true });
+
+  await repairWorktreePaths(dir);
 
   const cleanup = async () => {
     await rm(dir, { recursive: true, force: true });
@@ -97,7 +180,7 @@ export async function writePlanFile(
 export async function createSecondaryWorktree(
   mainDir: string,
 ): Promise<{ dir: string; cleanup: () => Promise<void> }> {
-  const dir = await mkdtemp(path.join(tmpdir(), "agent-plan-wt-"));
+  const dir = await mkdtemp(join(tmpdir(), "agent-plan-wt-"));
   // Remove the dir first since git worktree add creates it.
   await rm(dir, { recursive: true, force: true });
   await gitExec(mainDir, ["worktree", "add", dir]);

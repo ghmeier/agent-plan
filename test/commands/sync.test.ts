@@ -3,7 +3,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { syncPlans } from "../../src/commands/sync";
-import { createTestRepo, gitExec, initTestPlans, writePlanFile } from "../helpers";
+import {
+  createTestRepo,
+  createTestRepoWithPlans,
+  gitExec,
+  initTestPlans,
+  writePlanFile,
+} from "../helpers";
 
 async function createBareRemote(): Promise<{ dir: string; cleanup: () => Promise<void> }> {
   const dir = await mkdtemp(join(tmpdir(), "agent-plan-bare-"));
@@ -18,10 +24,8 @@ async function createBareRemote(): Promise<{ dir: string; cleanup: () => Promise
 
 describe("syncPlans", () => {
   test("skips sync cleanly when no remote is configured", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
-
       await expect(syncPlans({ cwd: repo.dir })).resolves.toBeUndefined();
     } finally {
       await repo.cleanup();
@@ -29,10 +33,9 @@ describe("syncPlans", () => {
   });
 
   test("pushes the plans branch to the remote", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     const bare = await createBareRemote();
     try {
-      await initTestPlans(repo.dir);
       await gitExec(repo.dir, ["remote", "add", "origin", bare.dir]);
       await writePlanFile(repo.dir, "plan.md", "hello");
 
@@ -47,10 +50,9 @@ describe("syncPlans", () => {
   });
 
   test("pushes successfully when the remote branch does not exist yet", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     const bare = await createBareRemote();
     try {
-      await initTestPlans(repo.dir);
       await gitExec(repo.dir, ["remote", "add", "origin", bare.dir]);
 
       await expect(syncPlans({ cwd: repo.dir })).resolves.toBeUndefined();
@@ -64,12 +66,11 @@ describe("syncPlans", () => {
   });
 
   test("pulls changes made from another repo synced to the same remote", async () => {
-    const repoA = await createTestRepo();
+    const repoA = await createTestRepoWithPlans();
     const repoB = await createTestRepo();
     const bare = await createBareRemote();
     try {
-      // Repo A initializes, writes a file, and syncs to the remote.
-      await initTestPlans(repoA.dir);
+      // Repo A writes a file and syncs to the remote.
       await gitExec(repoA.dir, ["remote", "add", "origin", bare.dir]);
       await writePlanFile(repoA.dir, "plan.md", "from repo A");
       await syncPlans({ cwd: repoA.dir });
@@ -89,10 +90,9 @@ describe("syncPlans", () => {
   });
 
   test("commits pending worktree edits before pushing", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     const bare = await createBareRemote();
     try {
-      await initTestPlans(repo.dir);
       await gitExec(repo.dir, ["remote", "add", "origin", bare.dir]);
 
       // Write a file directly into .plans/ without committing.
@@ -111,9 +111,8 @@ describe("syncPlans", () => {
   });
 
   test("exits nonzero when fetch fails for a reason other than missing remote branch", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       // Point origin at a path that is not a git repository so fetch fails outright.
       await gitExec(repo.dir, ["remote", "add", "origin", "/nonexistent/path/repo.git"]);
 
@@ -129,10 +128,9 @@ describe("syncPlans", () => {
   });
 
   test("exits nonzero and does not print success when push fails", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     const bare = await createBareRemote();
     try {
-      await initTestPlans(repo.dir);
       await gitExec(repo.dir, ["remote", "add", "origin", bare.dir]);
 
       // Sync once so the remote has the branch (fetch returns remoteHasBranch=true).
@@ -166,10 +164,9 @@ describe("syncPlans", () => {
   });
 
   test("sync succeeds when remote is given as a relative path", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     const bare = await createBareRemote();
     try {
-      await initTestPlans(repo.dir);
       // Use a relative URL — "../<dirname>" resolves from the repo root.
       const relativeUrl = `../${bare.dir.split("/").at(-1)}`;
       // Add the remote from within the repo so git records the URL as given.
@@ -193,12 +190,11 @@ describe("syncPlans", () => {
     // commits whose timestamps differed. Push from the second repo would then fail
     // because histories were unrelated. This test forces a timestamp difference by
     // committing a file before the second init, which produces a different parent SHA.
-    const repoA = await createTestRepo();
+    const repoA = await createTestRepoWithPlans();
     const repoB = await createTestRepo();
     const bare = await createBareRemote();
     try {
-      // Repo A inits, pushes to remote.
-      await initTestPlans(repoA.dir);
+      // Repo A pushes to remote.
       await gitExec(repoA.dir, ["remote", "add", "origin", bare.dir]);
       await writePlanFile(repoA.dir, "seed.md", "seed");
       await syncPlans({ cwd: repoA.dir });

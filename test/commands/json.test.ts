@@ -5,7 +5,7 @@ import { diffPlan } from "../../src/commands/diff";
 import { getPlanLog } from "../../src/commands/log";
 import { listPlans } from "../../src/commands/ls";
 import { showPlan } from "../../src/commands/show";
-import { createTestRepo, initTestPlans, type TestRepo, writePlanFile } from "../helpers";
+import { createTestRepoWithPlans, type TestRepo, writePlanFile } from "../helpers";
 
 function captureStdout(fn: () => Promise<void>): Promise<string> {
   const originalLog = console.log;
@@ -28,8 +28,7 @@ describe("--json output", () => {
   let repo: TestRepo;
 
   beforeEach(async () => {
-    repo = await createTestRepo();
-    await initTestPlans(repo.dir);
+    repo = await createTestRepoWithPlans();
     await writePlanFile(repo.dir, "plan.md", "# Plan\n", "Add plan");
   });
 

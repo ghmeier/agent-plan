@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { runComplete } from "../../src/commands/complete";
-import { createTestRepo, initTestPlans, writePlanFile } from "../helpers";
+import { createTestRepo, createTestRepoWithPlans, writePlanFile } from "../helpers";
 
 // Capture stdout lines from runComplete without affecting the real process.stdout.
 async function capture(fn: () => Promise<void>): Promise<string[]> {
@@ -18,9 +18,8 @@ async function capture(fn: () => Promise<void>): Promise<string[]> {
 
 describe("runComplete files", () => {
   test("lists committed plan files when .plans/ worktree exists", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       await writePlanFile(repo.dir, "alpha.md", "# Alpha");
       await writePlanFile(repo.dir, "sub/beta.md", "# Beta");
 
@@ -34,9 +33,8 @@ describe("runComplete files", () => {
   });
 
   test("lists files via git ls-tree when .plans/ worktree is absent", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       await writePlanFile(repo.dir, "plan.md", "# Plan");
 
       // Remove the worktree so __complete must fall back to git ls-tree.
@@ -52,9 +50,8 @@ describe("runComplete files", () => {
   });
 
   test("filters by prefix when provided", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       await writePlanFile(repo.dir, "alpha.md", "# Alpha");
       await writePlanFile(repo.dir, "beta.md", "# Beta");
 
@@ -96,9 +93,8 @@ describe("runComplete statuses", () => {
 
 describe("runComplete tags", () => {
   test("returns tags collected from plan frontmatter", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       await writePlanFile(repo.dir, "plan.md", "---\ntags: [cli, backend]\n---\n# Plan");
 
       const lines = await capture(() => runComplete("tags", undefined, { cwd: repo.dir }));
@@ -111,9 +107,8 @@ describe("runComplete tags", () => {
   });
 
   test("returns empty output when no plans have tags", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       await writePlanFile(repo.dir, "plan.md", "# No frontmatter");
 
       const lines = await capture(() => runComplete("tags", undefined, { cwd: repo.dir }));
@@ -127,9 +122,8 @@ describe("runComplete tags", () => {
 
 describe("runComplete versions", () => {
   test("returns short commit hashes from the plans branch", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       await writePlanFile(repo.dir, "plan.md", "v1");
       await writePlanFile(repo.dir, "plan.md", "v2", "Update plan");
 

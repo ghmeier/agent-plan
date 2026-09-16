@@ -4,7 +4,7 @@ import { addPlans } from "../../src/commands/add";
 import { listPlans } from "../../src/commands/ls";
 import { showPlan } from "../../src/commands/show";
 import { parseFrontmatter, today } from "../../src/lib/frontmatter";
-import { createTestRepo, gitExec, initTestPlans, type TestRepo, writePlanFile } from "../helpers";
+import { createTestRepoWithPlans, gitExec, type TestRepo, writePlanFile } from "../helpers";
 
 /** Reads a plan file's content as committed on the plans branch, not just what's on disk. */
 async function readCommittedPlan(repoDir: string, planPath: string): Promise<string> {
@@ -81,8 +81,7 @@ describe("ls filters", () => {
   let repo: TestRepo;
 
   beforeEach(async () => {
-    repo = await createTestRepo();
-    await initTestPlans(repo.dir);
+    repo = await createTestRepoWithPlans();
     await writePlanFile(repo.dir, "cli.md", FRONTMATTER_ACTIVE_CLI, "Add cli");
     await writePlanFile(repo.dir, "bug.md", FRONTMATTER_DRAFT_BUG, "Add bug");
     await writePlanFile(repo.dir, "old.md", FRONTMATTER_ARCHIVED, "Add old");
@@ -162,8 +161,7 @@ describe("show --raw", () => {
   let repo: TestRepo;
 
   beforeEach(async () => {
-    repo = await createTestRepo();
-    await initTestPlans(repo.dir);
+    repo = await createTestRepoWithPlans();
     await writePlanFile(repo.dir, "plan.md", FRONTMATTER_ACTIVE_CLI, "Add plan");
   });
 
@@ -209,8 +207,7 @@ describe("apl add timestamps", () => {
   let repo: TestRepo;
 
   beforeEach(async () => {
-    repo = await createTestRepo();
-    await initTestPlans(repo.dir);
+    repo = await createTestRepoWithPlans();
   });
 
   afterEach(async () => {

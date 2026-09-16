@@ -10,6 +10,7 @@ import { Git } from "../../src/lib/git";
 import {
   createSecondaryWorktree,
   createTestRepo,
+  createTestRepoWithPlans,
   gitExec,
   initTestPlans,
   writePlanFile,
@@ -44,10 +45,8 @@ describe("init always sets up .plans/ worktree", () => {
 
 describe("commit", () => {
   test("commits a file written directly to .plans/", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
-
       await Bun.write(join(repo.dir, ".plans", "notes.md"), "hello from worktree\n");
       await commitPlans({ cwd: repo.dir, message: "Add notes" });
 
@@ -62,9 +61,8 @@ describe("commit", () => {
   });
 
   test("add followed by commit does not delete the added file", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       await writePlanFile(repo.dir, "keep.md", "keep me");
 
       // Commit should find nothing new and leave keep.md intact.
@@ -79,10 +77,8 @@ describe("commit", () => {
   });
 
   test("prints nothing-to-commit when there are no changes", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
-
       const logs: string[] = [];
       const originalLog = console.log;
       console.log = (msg: string) => logs.push(msg);
@@ -102,11 +98,9 @@ describe("commit", () => {
 
 describe("secondary worktree symlink", () => {
   test("secondary worktree gets .plans as a symlink to the main checkout's .plans/", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     const secondary = await createSecondaryWorktree(repo.dir);
     try {
-      await initTestPlans(repo.dir);
-
       // ensurePlansWorktree must create the symlink when run from the secondary.
       // We trigger it by running a command.
       const files = await listPlans(undefined, secondary.dir);
@@ -126,11 +120,9 @@ describe("secondary worktree symlink", () => {
   });
 
   test("files committed from the secondary worktree are visible in the main checkout", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     const secondary = await createSecondaryWorktree(repo.dir);
     try {
-      await initTestPlans(repo.dir);
-
       // Write a source file in the secondary worktree and add it via apl add,
       // which triggers ensurePlansWorktree and creates the symlink.
       await Bun.write(join(secondary.dir, "from-secondary.md"), "secondary content");
@@ -208,10 +200,8 @@ describe("config migration from old plain-directory .plans/", () => {
 
 describe("config is not committed to the plans branch", () => {
   test("config.json does not appear in the plans branch tree", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
-
       const proc = Bun.spawn(["git", "ls-tree", "-r", "--name-only", "plans"], {
         cwd: repo.dir,
         stdout: "pipe",

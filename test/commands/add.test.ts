@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import path, { join } from "node:path";
 import { addPlans } from "../../src/commands/add";
-import { createTestRepo, gitExec, initTestPlans } from "../helpers";
+import { createTestRepoWithPlans, gitExec } from "../helpers";
 
 /** Reads a plan file's content as committed on the plans branch, not just what's on disk. */
 async function readCommittedPlan(repoDir: string, planPath: string): Promise<string> {
@@ -10,9 +10,8 @@ async function readCommittedPlan(repoDir: string, planPath: string): Promise<str
 
 describe("addPlans", () => {
   test("adds a single file and commits it to the plans branch", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       await Bun.write(path.join(repo.dir, "plan.md"), "hello plan");
 
       await addPlans(["plan.md"], { cwd: repo.dir });
@@ -25,9 +24,8 @@ describe("addPlans", () => {
   });
 
   test("adds multiple files at once in a single commit", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       await Bun.write(path.join(repo.dir, "a.md"), "content a");
       await Bun.write(path.join(repo.dir, "b.md"), "content b");
 
@@ -41,9 +39,8 @@ describe("addPlans", () => {
   });
 
   test("overwrites an existing file with new content", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       const filePath = path.join(repo.dir, "plan.md");
 
       await Bun.write(filePath, "original content");
@@ -59,9 +56,8 @@ describe("addPlans", () => {
   });
 
   test("uses a custom commit message when provided", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       await Bun.write(path.join(repo.dir, "plan.md"), "hello plan");
 
       await addPlans(["plan.md"], { cwd: repo.dir, message: "Custom commit message" });
@@ -74,9 +70,8 @@ describe("addPlans", () => {
   });
 
   test("added file is still present in .plans/ after a subsequent commit", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
       await Bun.write(path.join(repo.dir, "keep.md"), "keep me");
       await addPlans(["keep.md"], { cwd: repo.dir });
 
@@ -93,10 +88,8 @@ describe("addPlans", () => {
   });
 
   test("throws when the file does not exist on disk", async () => {
-    const repo = await createTestRepo();
+    const repo = await createTestRepoWithPlans();
     try {
-      await initTestPlans(repo.dir);
-
       await expect(addPlans(["missing.md"], { cwd: repo.dir })).rejects.toThrow();
     } finally {
       await repo.cleanup();

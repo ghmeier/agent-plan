@@ -5,14 +5,13 @@ import { diffPlan } from "../../src/commands/diff";
 import { getPlanLog } from "../../src/commands/log";
 import { listPlans } from "../../src/commands/ls";
 import { showPlan } from "../../src/commands/show";
-import { createTestRepo, initTestPlans, type TestRepo, writePlanFile } from "../helpers";
+import { createTestRepoWithPlans, type TestRepo, writePlanFile } from "../helpers";
 
 describe("read commands", () => {
   let repo: TestRepo;
 
   beforeEach(async () => {
-    repo = await createTestRepo();
-    await initTestPlans(repo.dir);
+    repo = await createTestRepoWithPlans();
     await writePlanFile(repo.dir, "plan.md", "# My Plan\n");
   });
 
