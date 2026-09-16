@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { printCompletion } from "../../src/commands/completion";
+import { createTestRepo, initTestPlans, writePlanFile } from "../helpers";
 
 // Capture stdout lines emitted by printCompletion.
 async function captureScript(shell: "bash" | "zsh" | "fish"): Promise<string> {
@@ -240,5 +241,215 @@ describe("completion syntax check", () => {
     }
     const script = await captureScript("zsh");
     expect(await syntaxCheck("zsh", script)).toBe(true);
+  });
+});
+
+// Availability is checked once, synchronously, so `test.skipIf` can decide
+// at collection time which shells to exercise on this machine.
+function hasCommand(cmd: string): boolean {
+  try {
+    const proc = Bun.spawnSync(["which", cmd], { stdout: "ignore", stderr: "ignore" });
+    return proc.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+const HAS_BASH = hasCommand("bash");
+const HAS_ZSH = hasCommand("zsh");
+const HAS_FISH = hasCommand("fish");
+
+const REPO_ENTRY = join(import.meta.dir, "..", "..", "src", "index.ts");
+
+interface ShellFixture {
+  repoDir: string;
+  path: string;
+  cleanup: () => Promise<void>;
+}
+
+// Writes an executable `apl` that runs this repo's CLI through `bun`, so a
+// sourced completion script can shell out to `apl __complete` exactly as it
+// would against a real install.
+async function writeAplShim(dir: string): Promise<void> {
+  const shimPath = join(dir, "apl");
+  await Bun.write(shimPath, `#!/bin/sh\nexec bun "${REPO_ENTRY}" "$@"\n`);
+  await chmod(shimPath, 0o755);
+}
+
+// Provisions a repo with plans initialized and a couple of tagged, statused
+// plan files, plus a PATH-only directory holding the `apl` shim.
+async function createShellFixture(): Promise<ShellFixture> {
+  const repo = await createTestRepo();
+  await initTestPlans(repo.dir);
+  await writePlanFile(
+    repo.dir,
+    "alpha.md",
+    "---\nstatus: active\ntags: [cli, backend]\n---\n# Alpha",
+  );
+  await writePlanFile(repo.dir, "beta.md", "---\nstatus: draft\ntags: [docs]\n---\n# Beta");
+
+  const shimDir = await mkdtemp(join(tmpdir(), "apl-shim-"));
+  await writeAplShim(shimDir);
+
+  return {
+    repoDir: repo.dir,
+    path: `${shimDir}:${process.env.PATH ?? ""}`,
+    cleanup: async () => {
+      await rm(shimDir, { recursive: true, force: true });
+      await repo.cleanup();
+    },
+  };
+}
+
+// Sources the generated bash script in a non-interactive `/bin/bash` (which
+// never defines `_init_completion`, so this always exercises the fallback
+// branch fixed for Task 1), simulates the given command line, and returns
+// the resulting COMPREPLY candidates.
+async function bashCandidates(
+  fixture: ShellFixture,
+  words: string[],
+  cword: number,
+): Promise<string[]> {
+  const script = await captureScript("bash");
+  const quoted = words.map((w) => `'${w.replace(/'/g, "'\\''")}'`).join(" ");
+  const cmd = `${script}\nCOMP_WORDS=(${quoted})\nCOMP_CWORD=${cword}\n_apl_completions\nprintf '%s\\n' "\${COMPREPLY[@]}"\n`;
+
+  const proc = Bun.spawn(["/bin/bash", "--noprofile", "--norc", "-c", cmd], {
+    cwd: fixture.repoDir,
+    env: { ...process.env, PATH: fixture.path },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const out = await new Response(proc.stdout).text();
+  await proc.exited;
+  return out.split("\n").filter((line) => line.length > 0);
+}
+
+describe("bash completion executed in a real shell", () => {
+  test.skipIf(!HAS_BASH)("completes subcommand names for 'apl sh'", async () => {
+    const fixture = await createShellFixture();
+    try {
+      const candidates = await bashCandidates(fixture, ["apl", "sh"], 1);
+
+      expect(candidates).toEqual(["show"]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test.skipIf(!HAS_BASH)("completes plan file names for 'apl show '", async () => {
+    const fixture = await createShellFixture();
+    try {
+      const candidates = await bashCandidates(fixture, ["apl", "show", ""], 2);
+
+      expect(candidates).toContain("alpha.md");
+      expect(candidates).toContain("beta.md");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test.skipIf(!HAS_BASH)("completes status values for 'apl ls --status '", async () => {
+    const fixture = await createShellFixture();
+    try {
+      const candidates = await bashCandidates(fixture, ["apl", "ls", "--status", ""], 3);
+
+      expect(candidates).toEqual(["draft", "active", "completed", "archived"]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test.skipIf(!HAS_BASH)("completes tag values for 'apl ls --tag '", async () => {
+    const fixture = await createShellFixture();
+    try {
+      const candidates = await bashCandidates(fixture, ["apl", "ls", "--tag", ""], 3);
+
+      expect(candidates).toContain("cli");
+      expect(candidates).toContain("backend");
+      expect(candidates).toContain("docs");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test.skipIf(!HAS_BASH)("completes flag names for 'apl ls --'", async () => {
+    const fixture = await createShellFixture();
+    try {
+      const candidates = await bashCandidates(fixture, ["apl", "ls", "--"], 2);
+
+      expect(candidates).toEqual(["--json", "--short", "--status", "--tag"]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+});
+
+describe("zsh completion executed in a real shell", () => {
+  test.skipIf(!HAS_ZSH)("loads the script under compinit without error", async () => {
+    const fixture = await createShellFixture();
+    const compdumpDir = await mkdtemp(join(tmpdir(), "apl-zcompdump-"));
+    try {
+      const script = await captureScript("zsh");
+      const cmd = `autoload -Uz compinit && compinit -u -d '${join(compdumpDir, "zcompdump")}'\n${script}\necho APL_ZSH_LOAD_OK`;
+
+      const proc = Bun.spawn(["zsh", "-f", "-c", cmd], {
+        cwd: fixture.repoDir,
+        env: { ...process.env, PATH: fixture.path },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const out = await new Response(proc.stdout).text();
+      const code = await proc.exited;
+
+      expect(code).toBe(0);
+      expect(out).toContain("APL_ZSH_LOAD_OK");
+    } finally {
+      await rm(compdumpDir, { recursive: true, force: true });
+      await fixture.cleanup();
+    }
+  });
+});
+
+describe("fish completion executed in a real shell", () => {
+  test.skipIf(!HAS_FISH)("passes fish --no-execute syntax check", async () => {
+    const script = await captureScript("fish");
+    const scriptDir = await mkdtemp(join(tmpdir(), "apl-fish-"));
+    const scriptPath = join(scriptDir, "completion.fish");
+    try {
+      await Bun.write(scriptPath, script);
+
+      const proc = Bun.spawn(["fish", "--no-execute", scriptPath], {
+        stdout: "ignore",
+        stderr: "pipe",
+      });
+      const code = await proc.exited;
+
+      expect(code).toBe(0);
+    } finally {
+      await rm(scriptDir, { recursive: true, force: true });
+    }
+  });
+
+  test.skipIf(!HAS_FISH)("completes subcommand names for 'apl sh'", async () => {
+    const fixture = await createShellFixture();
+    try {
+      const script = await captureScript("fish");
+      const cmd = `source '${join(fixture.repoDir, "completion.fish")}' 2>/dev/null; complete --do-complete 'apl sh'`;
+      await Bun.write(join(fixture.repoDir, "completion.fish"), script);
+
+      const proc = Bun.spawn(["fish", "--no-config", "-c", cmd], {
+        cwd: fixture.repoDir,
+        env: { ...process.env, PATH: fixture.path },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const out = await new Response(proc.stdout).text();
+      await proc.exited;
+
+      expect(out).toContain("show");
+    } finally {
+      await fixture.cleanup();
+    }
   });
 });

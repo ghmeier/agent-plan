@@ -16,10 +16,8 @@ _apl_completions() {
   if type _init_completion &>/dev/null; then
     _init_completion 2>/dev/null
   else
-    COMP_WORDS=($COMP_LINE)
-    cword=$((\${COMP_WORDS[@]} - 1))
-    cur="\${COMP_WORDS[$COMP_CWORD]}"
-    prev="\${COMP_WORDS[$COMP_CWORD-1]}"
+    cur="\${COMP_WORDS[COMP_CWORD]}"
+    prev="\${COMP_WORDS[COMP_CWORD-1]}"
   fi
 
   local subcommands="init add commit sync log show ls diff completion"
