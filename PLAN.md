@@ -68,16 +68,19 @@ Plans are stored on an orphan branch (default: `plans`) within the same reposito
 - **vs. plain files in the repo**: The whole point is avoiding churn and review burden on plan files.
 
 **How it works under the hood:**
-- Reads use `git show plans:<path>` to read files without switching branches.
-- Writes use git plumbing (`hash-object`, `mktree`, `commit-tree`, `update-ref`) to create commits on the orphan branch without touching the working tree.
-- A worktree at `.plans/` can optionally be materialized for direct file access (useful for agents that prefer reading/writing files normally).
+- `apl init` checks the plans branch out as a git worktree at `.plans/`. There is no other storage mode: every command reads and writes plan files through that directory, so agents and editors use normal file I/O.
+- If the branch already exists on the remote, `init` builds on it so teammates share history; otherwise it creates the orphan branch with an empty initial commit.
+- `apl commit` stages and commits everything that changed in `.plans/`. `show --version`, `log`, and `diff` run git inside the worktree.
+- The main checkout owns the real `.plans/` worktree. Secondary checkouts (from `git worktree add` or tools like `wt`) get `.plans` as a symlink to the main checkout's `.plans/`, so every checkout shares the same files and branch.
+- `.plans` is added to `<git-common-dir>/info/exclude` rather than `.gitignore`, so the rule applies to every checkout and never shows up in a commit.
+- Shell completion is the one place that reads from the branch directly (`git ls-tree`), because pressing tab should not create the worktree.
 
 ### CLI: Bun + Commander.js
 
 - **Runtime**: Bun (fast startup, native TypeScript, good shell spawning via `Bun.spawn`).
 - **CLI framework**: Commander.js for subcommand routing and auto-generated help.
-- **Git interaction**: Shell out to `git` directly. No wrapper library needed — the plumbing commands are simple string operations.
-- **Config**: `.plans/config.json` at repo root, gitignored.
+- **Git interaction**: Shell out to `git` directly. No wrapper library needed.
+- **Config**: `<git-common-dir>/agent-plan/config.json` (normally `.git/agent-plan/config.json`). Living in the shared git directory keeps it local, shared across checkouts, and off the plans branch. An old `.plans/config.json` is migrated on first read.
 
 ### Project Structure
 
@@ -139,16 +142,8 @@ Build a `GitPlumbing` class that wraps the low-level git operations needed to re
 - `exec(args)`: Run a git command via `Bun.spawn` and return stdout
 - `branchExists(branch)`: Check if the plans branch exists
 - `createOrphanBranch(branch)`: Create an empty orphan branch with an initial empty commit
-- `readFile(branch, path)`: Read a file from the plans branch via `git show`
-- `listFiles(branch, path?)`: List files on the plans branch via `git ls-tree`
-- `writeFiles(branch, files, message)`: Write one or more files to the plans branch using plumbing:
-  1. `git hash-object -w --stdin` to write each blob
-  2. Read existing tree with `git ls-tree` (if branch has commits)
-  3. Build new tree with `git mktree`
-  4. `git commit-tree` with parent
-  5. `git update-ref` to advance the branch
-- `getLog(branch, path?, limit?)`: Get commit history via `git log`
-- `diff(branch, path?)`: Diff a local file against its last-committed version on the plans branch
+
+> **Superseded:** the branch readers (`readFile`, `listFiles`, `getLog`), plumbing writes (`writeFiles`), and `diff` were removed when storage became worktree-only. The wrapper now only provides `exec`, `branchExists`, and `createOrphanBranch`.
 
 **Task 4: Config and path helpers (`src/lib/config.ts`, `src/lib/paths.ts`, `src/types.ts`)**
 - Define `PlanConfig` type: branch name, remote name, worktree path
@@ -206,6 +201,9 @@ Depends on Wave 2. Both tasks are independent of each other.
 Depends on Wave 3. Both tasks are independent of each other.
 
 **Task 10: Worktree mode**
+
+> **Superseded:** the worktree is no longer optional. `init` always creates it, the `--worktree` flag and `teardown` command don't exist, and every command works through `.plans/`. See "How it works under the hood" above.
+
 - `plan init --worktree`: Create a git worktree at `.plans/` checking out the plans branch
 - When worktree exists, `plan commit` does `git -C .plans add -A && git -C .plans commit`
 - `plan show` and `plan ls` can read directly from `.plans/` when the worktree is present
