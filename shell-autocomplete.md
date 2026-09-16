@@ -1,3 +1,14 @@
+---
+title: Shell Autocomplete
+status: completed
+tags:
+  - cli
+  - ux
+  - completion
+created: 2026-09-11
+updated: 2026-09-16
+---
+
 # Shell Autocomplete
 
 ## Problem

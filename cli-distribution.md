@@ -1,3 +1,13 @@
+---
+title: CLI Distribution
+status: active
+tags:
+  - cli
+  - distribution
+created: 2026-09-11
+updated: 2026-09-16
+---
+
 # CLI Distribution
 
 ## Problem

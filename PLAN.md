@@ -1,3 +1,14 @@
+---
+title: Plan Storage CLI
+status: completed
+tags:
+  - cli
+  - architecture
+  - storage
+created: 2026-09-11
+updated: 2026-09-16
+---
+
 # Plan Storage CLI
 
 We'd like to build a tool to manage plans for agent-driven coding workflows.

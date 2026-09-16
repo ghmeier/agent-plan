@@ -1,3 +1,13 @@
+---
+title: Linking Plans to Repo Changes
+status: draft
+tags:
+  - cli
+  - git
+created: 2026-09-11
+updated: 2026-09-16
+---
+
 # Linking Plans to Repo Changes
 
 ## Problem

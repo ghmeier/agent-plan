@@ -1,3 +1,13 @@
+---
+title: Frontmatter Metadata
+status: completed
+tags:
+  - cli
+  - ux
+created: 2026-09-11
+updated: 2026-09-16
+---
+
 # Frontmatter Metadata for Plan Files
 
 ## Problem
