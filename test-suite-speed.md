@@ -1,6 +1,6 @@
 ---
 title: Test Suite Speed
-status: active
+status: completed
 tags:
   - performance
   - tests
@@ -50,17 +50,17 @@ Every test calls `createTestRepo()` which spawns 5 git subprocesses (`git init`,
 
 ### Wave 1: Template repo in helpers.ts
 
-- [ ] Add a module-level template-repo promise in `test/helpers.ts` that creates one git repo per bun-test worker (one per file), runs the five `createTestRepo` git calls once, then freezes it as read-only.
-- [ ] Rewrite `createTestRepo()` to copy the template with `cp -r` instead of spawning git. A standard `cp -r` on APFS is copy-on-write and takes <5 ms.
-- [ ] Add `GIT_CONFIG_NOSYSTEM=1` and `GIT_TERMINAL_PROMPT=0` to every `gitExec` call in `helpers.ts` to skip reading `/etc/gitconfig` and suppress any interactive prompts.
+- [x] Add a module-level template-repo promise in `test/helpers.ts` that creates one git repo per bun-test worker (one per file), runs the five `createTestRepo` git calls once, then freezes it as read-only.
+- [x] Rewrite `createTestRepo()` to copy the template with `cp -r` instead of spawning git. A standard `cp -r` on APFS is copy-on-write and takes <5 ms.
+- [x] Add `GIT_CONFIG_NOSYSTEM=1` and `GIT_TERMINAL_PROMPT=0` to every `gitExec` call in `helpers.ts` to skip reading `/etc/gitconfig` and suppress any interactive prompts.
 
 ### Wave 2: Template repo with plans branch
 
-- [ ] Add a second module-level template that calls `initPlans` on top of the base template, producing a repo that already has the orphan branch and `.plans/` worktree.
-- [ ] Expose `createTestRepoWithPlans()` from `helpers.ts`; replace `createTestRepo()` + `initTestPlans()` call pairs in test files that do not test `initPlans` itself.
-- [ ] Leave `test/commands/init.test.ts` and `test/lib/git.test.ts` on the old `createTestRepo()` + `initTestPlans()` pair since they are testing init behavior directly.
+- [x] Add a second module-level template that calls `initPlans` on top of the base template, producing a repo that already has the orphan branch and `.plans/` worktree.
+- [x] Expose `createTestRepoWithPlans()` from `helpers.ts`; replace `createTestRepo()` + `initTestPlans()` call pairs in test files that do not test `initPlans` itself.
+- [x] Leave `test/commands/init.test.ts` and `test/lib/git.test.ts` on the old `createTestRepo()` + `initTestPlans()` pair since they are testing init behavior directly.
 
 ### Wave 3: Verify
 
-- [ ] Run `bun test` twice and record wall-clock time.
-- [ ] Run `bun run lint` and `bun run typecheck` and confirm they pass.
+- [x] Run `bun test` twice and record wall-clock time: 21.98s and 22.06s (down from 48.5s baseline).
+- [x] Run `bun run lint` and `bun run typecheck` and confirm they pass.
