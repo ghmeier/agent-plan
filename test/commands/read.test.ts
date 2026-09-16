@@ -31,7 +31,7 @@ describe("read commands", () => {
     const proc = Bun.spawn(["git", "rev-parse", "HEAD"], {
       cwd: join(repo.dir, ".plans"),
       stdout: "pipe",
-      stderr: "pipe",
+      stderr: "ignore",
     });
     const oldHash = (await new Response(proc.stdout).text()).trim();
     await proc.exited;

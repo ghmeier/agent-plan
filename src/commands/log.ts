@@ -26,7 +26,11 @@ async function getLogFromWorktree(
     stderr: "pipe",
   });
 
-  const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
 
   return stdout
     .split(LOG_RECORD_SEP)

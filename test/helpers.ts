@@ -85,19 +85,8 @@ export async function writePlanFile(
   await mkdir(path.dirname(destPath), { recursive: true });
   await Bun.write(destPath, content);
 
-  const proc1 = Bun.spawn(["git", "add", "--", planPath], {
-    cwd: plansDir,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  await proc1.exited;
-
-  const proc2 = Bun.spawn(["git", "commit", "-m", message ?? `Add ${planPath}`], {
-    cwd: plansDir,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  await proc2.exited;
+  await gitExec(plansDir, ["add", "--", planPath]);
+  await gitExec(plansDir, ["commit", "-m", message ?? `Add ${planPath}`]);
 }
 
 /**

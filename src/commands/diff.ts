@@ -13,11 +13,14 @@ async function gitDiff(plansDir: string, planPath?: string): Promise<string> {
     stderr: "pipe",
   });
 
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
 
   // git diff exits 0 (no diff) or 1 (diff found); anything else is a real error.
   if (exitCode > 1) {
-    const stderr = await new Response(proc.stderr).text();
     throw new Error(`git diff failed (exit ${exitCode}): ${stderr.trim()}`);
   }
 

@@ -7,8 +7,7 @@ import { initTestPlans, writePlanFile } from "../helpers";
 
 async function createTestRepo() {
   const dir = await mkdtemp(join(tmpdir(), "plan-test-"));
-  const proc = Bun.spawn(["git", "init"], { cwd: dir, stdout: "pipe", stderr: "pipe" });
-  await proc.exited;
+  await Bun.spawn(["git", "init"], { cwd: dir, stdout: "ignore", stderr: "ignore" }).exited;
   await Bun.spawn(["git", "config", "user.email", "test@test.com"], { cwd: dir }).exited;
   await Bun.spawn(["git", "config", "user.name", "Test"], { cwd: dir }).exited;
   // Create an initial commit so HEAD exists.
@@ -16,8 +15,8 @@ async function createTestRepo() {
   await Bun.spawn(["git", "add", ".gitkeep"], { cwd: dir }).exited;
   await Bun.spawn(["git", "commit", "-m", "Initial commit"], {
     cwd: dir,
-    stdout: "pipe",
-    stderr: "pipe",
+    stdout: "ignore",
+    stderr: "ignore",
   }).exited;
   return { dir, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }

@@ -215,7 +215,7 @@ describe("config is not committed to the plans branch", () => {
       const proc = Bun.spawn(["git", "ls-tree", "-r", "--name-only", "plans"], {
         cwd: repo.dir,
         stdout: "pipe",
-        stderr: "pipe",
+        stderr: "ignore",
       });
       const tree = await new Response(proc.stdout).text();
       await proc.exited;

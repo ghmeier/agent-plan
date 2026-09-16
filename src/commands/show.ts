@@ -13,7 +13,11 @@ async function readFromHistory(plansDir: string, ref: string, planPath: string):
     stdout: "pipe",
     stderr: "pipe",
   });
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, , exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
   if (exitCode !== 0) throw new Error(`No such file at ${ref}`);
   return stdout;
 }

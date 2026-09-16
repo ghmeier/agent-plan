@@ -64,7 +64,11 @@ export async function getGitCommonDir(repoRoot: string): Promise<string> {
     stdout: "pipe",
     stderr: "pipe",
   });
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, , exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
   if (exitCode !== 0) throw new Error(`Could not determine git common dir in ${repoRoot}`);
   const dir = stdout.trim();
   return path.isAbsolute(dir) ? dir : path.resolve(repoRoot, dir);
@@ -77,7 +81,11 @@ export async function getMainWorktreeRoot(repoRoot: string): Promise<string> {
     stdout: "pipe",
     stderr: "pipe",
   });
-  const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
   const firstLine = stdout.split("\n").find((l) => l.startsWith("worktree "));
   if (!firstLine) throw new Error(`Could not find main worktree from ${repoRoot}`);
   return firstLine.slice("worktree ".length).trim();

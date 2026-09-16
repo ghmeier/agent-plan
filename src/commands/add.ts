@@ -16,7 +16,11 @@ export interface AddOptions {
 
 async function runGit(args: string[], cwd: string): Promise<{ exitCode: number; stderr: string }> {
   const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-  const [stderr, exitCode] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+  const [, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
   return { exitCode, stderr };
 }
 

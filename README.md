@@ -155,6 +155,23 @@ apl sync                    # push to remote so teammates see it
 apl show plan.md --json     # read back structured plan state later
 ```
 
+## Shell Completion
+
+Tab completion is available for bash, zsh, and fish. It completes subcommands and
+flags, and asks the CLI for plan file names, tags, statuses, and commit hashes.
+
+```bash
+# Add it to your shell config automatically
+apl completion --install
+
+# Or print the script and wire it up yourself
+apl completion zsh    # eval "$(apl completion zsh)" in ~/.zshrc
+apl completion bash   # eval "$(apl completion bash)" in ~/.bashrc
+apl completion fish   # apl completion fish | source in ~/.config/fish/config.fish
+```
+
+Open a new shell, or source the rc file, for completion to take effect.
+
 ## Development
 
 ```bash
