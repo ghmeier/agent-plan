@@ -6,7 +6,7 @@ import { commitPlans } from "../../src/commands/commit";
 import { initPlans } from "../../src/commands/init";
 import { listPlans } from "../../src/commands/ls";
 import { readConfig } from "../../src/lib/config";
-import { GitPlumbing } from "../../src/lib/git";
+import { Git } from "../../src/lib/git";
 import {
   createSecondaryWorktree,
   createTestRepo,
@@ -162,7 +162,7 @@ describe("config migration from old plain-directory .plans/", () => {
       // initPlans without --branch must pick up "custom" from migration, not the default "plans".
       await initPlans({ cwd: repo.dir });
 
-      const git = new GitPlumbing(repo.dir, "custom");
+      const git = new Git(repo.dir, "custom");
       expect(await git.branchExists()).toBe(true);
 
       const config = await readConfig(repo.dir);
@@ -180,7 +180,7 @@ describe("config migration from old plain-directory .plans/", () => {
     const repo = await createTestRepo();
     try {
       // Create the custom branch so ensurePlansWorktree can check it out.
-      const git = new GitPlumbing(repo.dir, "custom");
+      const git = new Git(repo.dir, "custom");
       await git.createOrphanBranch();
 
       // Simulate old-style setup: plain .plans/ directory with config.json.

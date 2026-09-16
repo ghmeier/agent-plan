@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import path, { join } from "node:path";
 import { addPlans } from "../../src/commands/add";
-import { GitPlumbing } from "../../src/lib/git";
 import { createTestRepo, gitExec, initTestPlans } from "../helpers";
+
+/** Reads a plan file's content as committed on the plans branch, not just what's on disk. */
+async function readCommittedPlan(repoDir: string, planPath: string): Promise<string> {
+  return gitExec(join(repoDir, ".plans"), ["show", `HEAD:${planPath}`]);
+}
 
 describe("addPlans", () => {
   test("adds a single file and commits it to the plans branch", async () => {
@@ -13,8 +17,7 @@ describe("addPlans", () => {
 
       await addPlans(["plan.md"], { cwd: repo.dir });
 
-      const git = new GitPlumbing(repo.dir);
-      const content = await git.readFile("plan.md");
+      const content = await readCommittedPlan(repo.dir, "plan.md");
       expect(content).toBe("hello plan");
     } finally {
       await repo.cleanup();
@@ -30,9 +33,8 @@ describe("addPlans", () => {
 
       await addPlans(["a.md", "b.md"], { cwd: repo.dir });
 
-      const git = new GitPlumbing(repo.dir);
-      expect(await git.readFile("a.md")).toBe("content a");
-      expect(await git.readFile("b.md")).toBe("content b");
+      expect(await readCommittedPlan(repo.dir, "a.md")).toBe("content a");
+      expect(await readCommittedPlan(repo.dir, "b.md")).toBe("content b");
     } finally {
       await repo.cleanup();
     }
@@ -50,8 +52,7 @@ describe("addPlans", () => {
       await Bun.write(filePath, "updated content");
       await addPlans(["plan.md"], { cwd: repo.dir });
 
-      const git = new GitPlumbing(repo.dir);
-      expect(await git.readFile("plan.md")).toBe("updated content");
+      expect(await readCommittedPlan(repo.dir, "plan.md")).toBe("updated content");
     } finally {
       await repo.cleanup();
     }

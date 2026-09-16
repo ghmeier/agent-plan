@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { NotInitializedError } from "../lib/errors";
-import { GitPlumbing } from "../lib/git";
+import { Git } from "../lib/git";
 import { info, error as logError, success, warn } from "../lib/output";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
 import { ensurePlansWorktree } from "../lib/worktree";
@@ -37,7 +37,7 @@ export async function syncPlans(options: SyncOptions = {}): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
-  const git = new GitPlumbing(repoRoot, config.branch);
+  const git = new Git(repoRoot, config.branch);
 
   if (!(await git.branchExists())) {
     throw new NotInitializedError();

@@ -1,9 +1,15 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
-import type { LogEntry } from "../lib/git";
 import { info } from "../lib/output";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
 import { ensurePlansWorktree } from "../lib/worktree";
+
+export interface LogEntry {
+  hash: string;
+  message: string;
+  date: string;
+  author: string;
+}
 
 const DEFAULT_LIMIT = 20;
 

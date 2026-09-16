@@ -3,7 +3,7 @@ import { lstat, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { initPlans } from "../../src/commands/init";
 import { readConfig } from "../../src/lib/config";
-import { GitPlumbing } from "../../src/lib/git";
+import { Git } from "../../src/lib/git";
 import { getGitCommonDir } from "../../src/lib/paths";
 import { createTestRepo, gitExec } from "../helpers";
 
@@ -13,7 +13,7 @@ describe("initPlans", () => {
     try {
       await initPlans({ cwd: repo.dir });
 
-      const git = new GitPlumbing(repo.dir, "plans");
+      const git = new Git(repo.dir, "plans");
       expect(await git.branchExists()).toBe(true);
 
       const plansGit = await lstat(path.join(repo.dir, ".plans", ".git"));
@@ -45,7 +45,7 @@ describe("initPlans", () => {
       await initPlans({ cwd: repo.dir });
       await expect(initPlans({ cwd: repo.dir })).resolves.toBeUndefined();
 
-      const git = new GitPlumbing(repo.dir, "plans");
+      const git = new Git(repo.dir, "plans");
       expect(await git.branchExists()).toBe(true);
     } finally {
       await repo.cleanup();
@@ -57,7 +57,7 @@ describe("initPlans", () => {
     try {
       await initPlans({ cwd: repo.dir, branch: "custom" });
 
-      const git = new GitPlumbing(repo.dir, "custom");
+      const git = new Git(repo.dir, "custom");
       expect(await git.branchExists()).toBe(true);
 
       const config = await readConfig(repo.dir);

@@ -1,10 +1,10 @@
-import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
 import { colors, info } from "../lib/output";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
+import { listMarkdownFiles } from "../lib/plan-files";
 import { ensurePlansWorktree } from "../lib/worktree";
 
 export interface LsOptions {
@@ -17,37 +17,6 @@ export interface LsOptions {
 export interface PlanEntry {
   file: string;
   meta: PlanMeta;
-}
-
-/** Recursively lists .md files under dir, returning repo-relative posix paths. */
-async function listMarkdownFiles(dir: string, base = dir): Promise<string[]> {
-  const results: string[] = [];
-  // biome-ignore lint/suspicious/noExplicitAny: bun types differ from Node types for Dirent
-  let entries: any[];
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return results;
-  }
-
-  for (const entry of entries) {
-    // Skip git internals.
-    if (entry.name === ".git") continue;
-
-    const fullPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...(await listMarkdownFiles(fullPath, base)));
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
-      // Use posix separators for consistent cross-platform output.
-      const rel = fullPath
-        .slice(base.length + 1)
-        .split(/[\\/]/)
-        .join("/");
-      results.push(rel);
-    }
-  }
-
-  return results.sort();
 }
 
 export async function listPlans(

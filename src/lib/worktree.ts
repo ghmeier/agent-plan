@@ -2,7 +2,7 @@ import { appendFile, lstat, readFile, realpath, rm, symlink } from "node:fs/prom
 import path from "node:path";
 import type { PlanConfig } from "../types";
 import { NotInitializedError } from "./errors";
-import { GitPlumbing } from "./git";
+import { Git } from "./git";
 import { getGitCommonDir, getMainWorktreeRoot, getPlansDir } from "./paths";
 
 async function realpathSafe(p: string): Promise<string> {
@@ -14,7 +14,7 @@ async function realpathSafe(p: string): Promise<string> {
 }
 
 async function isWorktreeDir(repoRoot: string, plansDir: string): Promise<boolean> {
-  const git = new GitPlumbing(repoRoot);
+  const git = new Git(repoRoot);
   let output: string;
   try {
     output = await git.exec(["worktree", "list", "--porcelain"]);
@@ -54,7 +54,7 @@ async function ensureInfoExclude(repoRoot: string): Promise<void> {
 }
 
 async function addWorktreeDir(repoRoot: string, plansDir: string, branch: string): Promise<void> {
-  const git = new GitPlumbing(repoRoot);
+  const git = new Git(repoRoot);
 
   if (await isWorktreeDir(repoRoot, plansDir)) {
     return;
@@ -86,7 +86,7 @@ export async function ensurePlansWorktree(
   isInit = false,
 ): Promise<void> {
   const plansDir = getPlansDir(repoRoot);
-  const git = new GitPlumbing(repoRoot, config.branch);
+  const git = new Git(repoRoot, config.branch);
 
   const mainRoot = await getMainWorktreeRoot(repoRoot);
   // Resolve symlinks before comparing — on macOS, /var/folders is a symlink to

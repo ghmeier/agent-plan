@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { GitPlumbing } from "../../src/lib/git";
-import { initTestPlans, writePlanFile } from "../helpers";
+import { Git } from "../../src/lib/git";
 
 async function createTestRepo() {
   const dir = await mkdtemp(join(tmpdir(), "plan-test-"));
@@ -21,18 +20,29 @@ async function createTestRepo() {
   return { dir, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
 
-describe("GitPlumbing", () => {
+describe("Git", () => {
   let dir: string;
   let cleanup: () => Promise<void>;
-  let git: GitPlumbing;
+  let git: Git;
 
   beforeEach(async () => {
     ({ dir, cleanup } = await createTestRepo());
-    git = new GitPlumbing(dir, "plans");
+    git = new Git(dir, "plans");
   });
 
   afterEach(async () => {
     await cleanup();
+  });
+
+  test("exec returns trimmed stdout from a git command", async () => {
+    const output = await git.exec(["rev-parse", "--abbrev-ref", "HEAD"]);
+
+    expect(output).not.toMatch(/\s$/);
+    expect(output.length).toBeGreaterThan(0);
+  });
+
+  test("exec throws on a non-zero exit", async () => {
+    expect(git.exec(["not-a-real-command"])).rejects.toThrow();
   });
 
   test("branchExists returns false before creation and true after", async () => {
@@ -46,60 +56,7 @@ describe("GitPlumbing", () => {
   test("createOrphanBranch creates a branch with no files", async () => {
     await git.createOrphanBranch();
 
-    const files = await git.listFiles();
-    expect(files).toEqual([]);
-  });
-
-  test("listFiles returns committed files", async () => {
-    await initTestPlans(dir);
-    await writePlanFile(dir, "note.md", "hello");
-
-    const files = await git.listFiles();
-    expect(files).toContain("note.md");
-  });
-
-  test("readFile returns committed content", async () => {
-    await initTestPlans(dir);
-    await writePlanFile(dir, "hello.md", "# Hello Plan\n\nSome content here.\n");
-
-    const content = await git.readFile("hello.md");
-    expect(content).toBe("# Hello Plan\n\nSome content here.\n");
-  });
-
-  test("readFile on nonexistent file throws", async () => {
-    await git.createOrphanBranch();
-
-    expect(git.readFile("missing.md")).rejects.toThrow();
-  });
-
-  test("getLog returns entries in reverse chronological order with correct fields", async () => {
-    await initTestPlans(dir);
-    await writePlanFile(dir, "a.md", "a1", "First commit");
-    await writePlanFile(dir, "a.md", "a2", "Second commit");
-
-    const log = await git.getLog();
-
-    expect(log.length).toBeGreaterThanOrEqual(2);
-    const messages = log.map((e) => e.message);
-    expect(messages.indexOf("Second commit")).toBeLessThan(messages.indexOf("First commit"));
-
-    for (const entry of log) {
-      expect(entry.hash).toMatch(/^[0-9a-f]{40}$/);
-      expect(entry.author).toBe("Test");
-      expect(new Date(entry.date).toString()).not.toBe("Invalid Date");
-    }
-  });
-
-  test("getLog respects a limit", async () => {
-    await initTestPlans(dir);
-    await writePlanFile(dir, "a.md", "a1", "First");
-    await writePlanFile(dir, "a.md", "a2", "Second");
-
-    const log = await git.getLog(undefined, 1);
-
-    expect(log.length).toBe(1);
-    const [first] = log;
-    if (!first) throw new Error("Expected a log entry");
-    expect(first.message).toBe("Second");
+    const files = await git.exec(["ls-tree", "-r", "--name-only", "plans"]);
+    expect(files).toBe("");
   });
 });

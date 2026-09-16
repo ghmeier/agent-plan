@@ -4,7 +4,7 @@ import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { FileNotFoundError, NotInitializedError } from "../lib/errors";
 import { stampTimestamps } from "../lib/frontmatter";
-import { GitPlumbing } from "../lib/git";
+import { Git } from "../lib/git";
 import { success } from "../lib/output";
 import { findRepoRoot, getPlansDir, resolvePlanPath } from "../lib/paths";
 import { ensurePlansWorktree } from "../lib/worktree";
@@ -32,7 +32,7 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
   const cwd = options.cwd ?? process.cwd();
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
-  const git = new GitPlumbing(repoRoot, config.branch);
+  const git = new Git(repoRoot, config.branch);
 
   if (!(await git.branchExists())) {
     throw new NotInitializedError();

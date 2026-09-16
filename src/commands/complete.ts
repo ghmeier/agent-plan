@@ -4,6 +4,7 @@ import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
+import { listMarkdownFiles } from "../lib/plan-files";
 
 const STATUSES = ["draft", "active", "completed", "archived"];
 
@@ -31,31 +32,6 @@ async function plansDirReady(plansDir: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function listMdFiles(dir: string, base = dir): Promise<string[]> {
-  const results: string[] = [];
-  // biome-ignore lint/suspicious/noExplicitAny: bun types differ from Node types for Dirent
-  let entries: any[];
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return results;
-  }
-  for (const entry of entries) {
-    if (entry.name === ".git") continue;
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...(await listMdFiles(full, base)));
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
-      const rel = full
-        .slice(base.length + 1)
-        .split(/[\\/]/)
-        .join("/");
-      results.push(rel);
-    }
-  }
-  return results.sort();
 }
 
 async function gitSpawn(
@@ -86,7 +62,7 @@ async function completeFiles(prefix: string, cwd?: string): Promise<void> {
   let files: string[];
 
   if (await plansDirReady(plansDir)) {
-    files = await listMdFiles(plansDir);
+    files = await listMarkdownFiles(plansDir);
   } else {
     const { stdout, ok } = await gitSpawn(repoRoot, [
       "ls-tree",
@@ -108,7 +84,7 @@ async function completeFiles(prefix: string, cwd?: string): Promise<void> {
 
 async function readTagsFromWorktree(plansDir: string): Promise<Set<string>> {
   const tags = new Set<string>();
-  const files = await listMdFiles(plansDir);
+  const files = await listMarkdownFiles(plansDir);
   for (const f of files) {
     try {
       const content = await Bun.file(join(plansDir, f)).text();

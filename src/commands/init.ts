@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { readConfig, writeConfig } from "../lib/config";
 import { NotARepoError } from "../lib/errors";
-import { GitPlumbing } from "../lib/git";
+import { Git } from "../lib/git";
 import { installAutoCommitHook, removeAutoCommitHook } from "../lib/hooks";
 import { success } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
@@ -22,7 +22,7 @@ export async function initPlans(
   const branch = options.branch ?? existingConfig.branch ?? DEFAULT_CONFIG.branch;
   const remote = existingConfig.remote ?? DEFAULT_CONFIG.remote;
 
-  const git = new GitPlumbing(repoRoot, branch);
+  const git = new Git(repoRoot, branch);
   const alreadyExisted = await git.branchExists();
 
   if (!alreadyExisted) {

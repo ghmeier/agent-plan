@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import path from "node:path";
+import path, { join } from "node:path";
 import { addPlans } from "../../src/commands/add";
 import { listPlans } from "../../src/commands/ls";
 import { showPlan } from "../../src/commands/show";
 import { parseFrontmatter, today } from "../../src/lib/frontmatter";
-import { GitPlumbing } from "../../src/lib/git";
-import { createTestRepo, initTestPlans, type TestRepo, writePlanFile } from "../helpers";
+import { createTestRepo, gitExec, initTestPlans, type TestRepo, writePlanFile } from "../helpers";
+
+/** Reads a plan file's content as committed on the plans branch, not just what's on disk. */
+async function readCommittedPlan(repoDir: string, planPath: string): Promise<string> {
+  return gitExec(join(repoDir, ".plans"), ["show", `HEAD:${planPath}`]);
+}
 
 // Redirects console.log output to a captured string so tests can inspect
 // what commands would have printed without cluttering test output.
@@ -219,8 +223,7 @@ describe("apl add timestamps", () => {
 
     await addPlans(["plan.md"], { cwd: repo.dir });
 
-    const git = new GitPlumbing(repo.dir);
-    const stored = await git.readFile("plan.md");
+    const stored = await readCommittedPlan(repo.dir, "plan.md");
     const { meta } = parseFrontmatter(stored);
 
     expect(meta.created).toBe(today());
@@ -233,8 +236,7 @@ describe("apl add timestamps", () => {
 
     await addPlans(["plan.md"], { cwd: repo.dir });
 
-    const git = new GitPlumbing(repo.dir);
-    const stored = await git.readFile("plan.md");
+    const stored = await readCommittedPlan(repo.dir, "plan.md");
     const { meta } = parseFrontmatter(stored);
 
     expect(meta.created).toBe("2025-01-01");
@@ -248,8 +250,7 @@ describe("apl add timestamps", () => {
 
     await addPlans(["plain.md"], { cwd: repo.dir });
 
-    const git = new GitPlumbing(repo.dir);
-    const stored = await git.readFile("plain.md");
+    const stored = await readCommittedPlan(repo.dir, "plain.md");
     expect(stored).toBe(content);
   });
 });
