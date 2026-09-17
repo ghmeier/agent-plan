@@ -48,15 +48,15 @@ Replace the current tests, which import command functions and internal library m
 
 ## Outcome
 
-Implemented on branch `cli-flow-tests` (worktree `agent-plan.cli-flow-tests`), not yet committed.
+Merged to `main` in three commits: the auto-commit hook fix, the `show --at` rename, and the test rewrite. The rebase onto `main` also ported the two tests from "Refuse to overwrite an existing .plans" into the new style.
 
-- The suite is now 96 tests in six files (`init`, `authoring`, `reading`, `sync`, `checkouts`, `completion`) plus `test/harness.ts`. Nothing under `test/` imports from `src/`.
+- The suite is now 99 tests in six files (`init`, `authoring`, `reading`, `sync`, `checkouts`, `completion`) plus `test/harness.ts`. Nothing under `test/` imports from `src/`.
 - `bunfig.toml` runs every test file concurrently. The suite takes about 13 seconds, down from 23, and passed four runs in a row with no flakes.
 - Tests planned as `worktrees.test.ts` and an auto-commit file were combined into `checkouts.test.ts`.
 
 ### Bugs found by driving the real CLI
 
-1. **`apl show --version <ref>` never worked.** The program-wide `-V, --version` flag consumes `--version` even after the subcommand, so the CLI prints `0.1.0`. Fixing it means either renaming the `show` flag (for example `--at <ref>`) or enabling positional options, which would stop `apl ls --no-color` from parsing. Left for a decision. The two tests covering it are marked `test.failing`.
+1. **`apl show --version <ref>` never worked.** The program-wide `-V, --version` flag consumed `--version` even after the subcommand, so the CLI printed `0.1.0`. Fixed by renaming the flag to `apl show --at <ref>`, including shell completions and the README.
 2. **The `--auto-commit` hook never committed anything.** Git runs hooks with `GIT_INDEX_FILE=.git/index`; inside `.plans/`, `.git` is a file, so `apl commit` failed and the hook's `2>/dev/null || true` hid the error. Fixed in `src/lib/hooks.ts` by unsetting `GIT_DIR`, `GIT_WORK_TREE`, and `GIT_INDEX_FILE` before calling `apl`. Hooks that are already installed keep the broken script until someone runs `apl init --no-auto-commit` and then `apl init --auto-commit`.
 
 ### Noted, not changed
