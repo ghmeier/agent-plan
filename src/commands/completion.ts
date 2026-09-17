@@ -31,10 +31,10 @@ _apl_completions() {
   case "$subcmd" in
     show)
       case "$prev" in
-        --version) COMPREPLY=($(compgen -W "$(apl __complete versions 2>/dev/null)" -- "$cur")) ;;
+        --at) COMPREPLY=($(compgen -W "$(apl __complete versions 2>/dev/null)" -- "$cur")) ;;
         *)
           if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--version --raw --json" -- "$cur"))
+            COMPREPLY=($(compgen -W "--at --raw --json" -- "$cur"))
           else
             COMPREPLY=($(compgen -W "$(apl __complete files "$cur" 2>/dev/null)" -- "$cur"))
           fi
@@ -110,7 +110,7 @@ _apl() {
       case $words[1] in
         show)
           _arguments \\
-            '--version[Show historical version]:ref:($(apl __complete versions 2>/dev/null))' \\
+            '--at[Show the file as of a commit ref]:ref:($(apl __complete versions 2>/dev/null))' \\
             '--raw[Print file as-is without metadata header]' \\
             '--json[Output in JSON format]' \\
             ':plan file:($(apl __complete files 2>/dev/null))'
@@ -174,7 +174,7 @@ complete -c apl -n '__fish_use_subcommand' -a diff       -d 'Show uncommitted ch
 complete -c apl -n '__fish_use_subcommand' -a completion -d 'Print shell completion script'
 
 # show
-complete -c apl -n '__fish_seen_subcommand_from show' -l version -d 'Historical version'
+complete -c apl -n '__fish_seen_subcommand_from show' -l at -r -d 'Show the file as of a commit ref'
 complete -c apl -n '__fish_seen_subcommand_from show' -l raw     -d 'Print as-is without metadata header'
 complete -c apl -n '__fish_seen_subcommand_from show' -l json    -d 'Output in JSON format'
 complete -c apl -n '__fish_seen_subcommand_from show' -a '(apl __complete files 2>/dev/null)'

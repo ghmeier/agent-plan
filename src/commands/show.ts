@@ -24,7 +24,7 @@ async function readFromHistory(plansDir: string, ref: string, planPath: string):
 
 export async function showPlan(
   planPath: string,
-  options: { version?: string; json?: boolean; raw?: boolean },
+  options: { at?: string; json?: boolean; raw?: boolean },
   cwd?: string,
 ): Promise<string> {
   const repoRoot = await findRepoRoot(cwd);
@@ -36,8 +36,8 @@ export async function showPlan(
 
   let content: string;
   try {
-    if (options.version) {
-      content = await readFromHistory(plansDir, options.version, planPath);
+    if (options.at) {
+      content = await readFromHistory(plansDir, options.at, planPath);
     } else {
       const file = Bun.file(join(plansDir, planPath));
       if (!(await file.exists())) throw new Error("not found");
@@ -90,12 +90,10 @@ export function registerShow(program: Command): void {
   program
     .command("show <path>")
     .description("Show the contents of a plan file")
-    .option("--version <ref>", "Show a historical version by commit ref")
+    .option("--at <ref>", "Show the file as of a commit ref")
     .option("--json", "Output in JSON format")
     .option("--raw", "Print the file as-is, without the metadata header")
-    .action(
-      async (planPath: string, options: { version?: string; json?: boolean; raw?: boolean }) => {
-        await showPlan(planPath, options);
-      },
-    );
+    .action(async (planPath: string, options: { at?: string; json?: boolean; raw?: boolean }) => {
+      await showPlan(planPath, options);
+    });
 }

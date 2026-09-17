@@ -65,14 +65,14 @@ apl commit
 apl commit -m "Update plan after review"
 ```
 
-### `apl show <path> [--version <ref>] [--json] [--raw]`
+### `apl show <path> [--at <ref>] [--json] [--raw]`
 
-Prints the contents of a plan file. Reads from `.plans/<path>` directly, so uncommitted edits are visible. Use `--version` to read a historical revision from git history.
+Prints the contents of a plan file. Reads from `.plans/<path>` directly, so uncommitted edits are visible. Use `--at` to read a historical revision from git history.
 
 ```bash
 apl show plan.md
 apl show plan.md --raw
-apl show plan.md --version HEAD~2
+apl show plan.md --at HEAD~2
 ```
 
 ### `apl ls [path] [--json] [--short] [--status <status>] [--tag <tag>]`
