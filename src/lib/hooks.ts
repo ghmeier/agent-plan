@@ -7,10 +7,17 @@ const HOOK_SCRIPT = `#!/bin/sh
 # agent-plan: auto-commit plan changes
 # Installed by 'apl init --auto-commit'. Remove with 'apl init --no-auto-commit'.
 
+message="Auto-commit: plan changes after $(git log -1 --format='%h %s')"
+
+# Git runs hooks with variables such as GIT_INDEX_FILE pointing at the code
+# checkout. Inherited by the git commands apl runs inside .plans/, they would
+# make git use the code checkout's index and the plan commit would fail.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+
 if command -v apl >/dev/null 2>&1; then
-  apl commit -m "Auto-commit: plan changes after $(git log -1 --format='%h %s')" 2>/dev/null || true
+  apl commit -m "$message" 2>/dev/null || true
 elif command -v bun >/dev/null 2>&1; then
-  bun run agent-plan commit -m "Auto-commit: plan changes after $(git log -1 --format='%h %s')" 2>/dev/null || true
+  bun run agent-plan commit -m "$message" 2>/dev/null || true
 fi
 `;
 
