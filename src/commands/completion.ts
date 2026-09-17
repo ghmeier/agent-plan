@@ -88,7 +88,7 @@ _apl() {
 
   _arguments -C \\
     '1: :->subcmd' \\
-    '*: :->args'
+    '*:: :->args'
 
   case $state in
     subcmd)
@@ -107,7 +107,7 @@ _apl() {
       _describe 'subcommand' subcommands
       ;;
     args)
-      case $words[2] in
+      case $words[1] in
         show)
           _arguments \\
             '--version[Show historical version]:ref:($(apl __complete versions 2>/dev/null))' \\

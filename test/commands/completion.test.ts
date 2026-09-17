@@ -384,7 +384,92 @@ describe("bash completion executed in a real shell", () => {
   });
 });
 
+// zsh only runs completion widgets inside an interactive line editor, so this
+// drives `zsh -i` through a pseudo-terminal, types the command line, presses
+// TAB, and returns everything printed until zsh redraws the prompt below the
+// candidate listing. A listing only appears when there are several candidates,
+// so callers must use command lines with more than one match.
+async function zshTabListing(fixture: ShellFixture, line: string): Promise<string> {
+  const workDir = await mkdtemp(join(tmpdir(), "apl-zsh-"));
+  try {
+    const scriptPath = join(workDir, "apl.zsh");
+    await Bun.write(scriptPath, await captureScript("zsh"));
+    const driver = `
+zmodload zsh/zpty
+# Reads until the buffer matches a pattern or the deadline passes, so a
+# completion that never redraws the prompt fails the test instead of hanging.
+read_until() {
+  local pattern=$1 chunk deadline=$(( SECONDS + 15 ))
+  output=""
+  while (( SECONDS < deadline )); do
+    if zpty -r -t shell chunk 2>/dev/null; then
+      output+=$chunk
+      [[ $output == $~pattern ]] && return 0
+    else
+      sleep 0.1
+    fi
+  done
+  return 1
+}
+zpty shell 'TERM=dumb zsh -f -i'
+zpty -w shell 'PS1="APL_PROMPT> "; unset zle_bracketed_paste; autoload -Uz compinit; compinit -u -d ${join(workDir, "zcompdump")}; source ${scriptPath}; cd ${fixture.repoDir}; echo APL_""READY'
+read_until '*APL_READY*APL_PROMPT> *'
+zpty -w -n shell $'${line}\\t'
+read_until '*APL_PROMPT> *'
+zpty -d shell
+print -r -- "$output"
+`;
+
+    const proc = Bun.spawn(["zsh", "-f", "-c", driver], {
+      env: { ...process.env, PATH: fixture.path },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [out] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    return out.replace(/\r/g, "");
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
+
 describe("zsh completion executed in a real shell", () => {
+  test.skipIf(!HAS_ZSH)(
+    "lists plan files for 'apl show '",
+    async () => {
+      const fixture = await createShellFixture();
+      try {
+        const listing = await zshTabListing(fixture, "apl show ");
+
+        expect(listing).toContain("alpha.md");
+        expect(listing).toContain("beta.md");
+      } finally {
+        await fixture.cleanup();
+      }
+    },
+    30_000,
+  );
+
+  test.skipIf(!HAS_ZSH)(
+    "lists status values for 'apl ls --status '",
+    async () => {
+      const fixture = await createShellFixture();
+      try {
+        const listing = await zshTabListing(fixture, "apl ls --status ");
+
+        for (const status of ["draft", "active", "completed", "archived"]) {
+          expect(listing).toContain(status);
+        }
+      } finally {
+        await fixture.cleanup();
+      }
+    },
+    30_000,
+  );
+
   test.skipIf(!HAS_ZSH)("loads the script under compinit without error", async () => {
     const fixture = await createShellFixture();
     const compdumpDir = await mkdtemp(join(tmpdir(), "apl-zcompdump-"));
