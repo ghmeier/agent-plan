@@ -6,7 +6,7 @@ tags:
   - architecture
   - storage
 created: 2026-09-11
-updated: 2026-09-16
+updated: 2026-09-17
 ---
 
 # Plan Storage CLI
@@ -91,7 +91,7 @@ Plans are stored on an orphan branch (default: `plans`) within the same reposito
 - **Runtime**: Bun (fast startup, native TypeScript, good shell spawning via `Bun.spawn`).
 - **CLI framework**: Commander.js for subcommand routing and auto-generated help.
 - **Git interaction**: Shell out to `git` directly. No wrapper library needed.
-- **Config**: `<git-common-dir>/agent-plan/config.json` (normally `.git/agent-plan/config.json`). Living in the shared git directory keeps it local, shared across checkouts, and off the plans branch. An old `.plans/config.json` is migrated on first read.
+- **Config**: `<git-common-dir>/agent-plan/config.json` (normally `.git/agent-plan/config.json`). Living in the shared git directory keeps it local, shared across checkouts, and off the plans branch.
 
 ### Project Structure
 
