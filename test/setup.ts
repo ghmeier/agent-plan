@@ -1,4 +1,4 @@
 import { afterAll } from "bun:test";
-import { removeTestTemplates } from "./helpers";
+import { removeScratchRoot } from "./harness";
 
-afterAll(removeTestTemplates);
+afterAll(removeScratchRoot);

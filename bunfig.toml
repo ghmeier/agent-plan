@@ -1,2 +1,5 @@
 [test]
 preload = ["./test/setup.ts"]
+# Every test builds its own repos in its own temp directory and drives the CLI
+# as a subprocess, so tests share no state and can run at the same time.
+concurrentTestGlob = "**/*.test.ts"
