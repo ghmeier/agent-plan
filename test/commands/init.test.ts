@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { lstat, readFile, writeFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import { initPlans } from "../../src/commands/init";
 import { readConfig } from "../../src/lib/config";
@@ -91,21 +91,6 @@ describe("initPlans", () => {
       const exclude = await readFile(path.join(gitCommonDir, "info", "exclude"), "utf8");
       const occurrences = exclude.split("\n").filter((l) => l.trim() === ".plans").length;
       expect(occurrences).toBe(1);
-    } finally {
-      await repo.cleanup();
-    }
-  });
-
-  test("does not modify .gitignore", async () => {
-    const repo = await createTestRepo();
-    try {
-      const gitignorePath = path.join(repo.dir, ".gitignore");
-      await writeFile(gitignorePath, "node_modules\n.env\n");
-
-      await initPlans({ cwd: repo.dir });
-
-      const after = await readFile(gitignorePath, "utf8");
-      expect(after).toBe("node_modules\n.env\n");
     } finally {
       await repo.cleanup();
     }

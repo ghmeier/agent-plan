@@ -3,11 +3,6 @@ import { join } from "node:path";
 
 const MARKER = "agent-plan";
 
-// Hooks installed before the project was renamed carry this marker and call a
-// `plan` binary that no longer exists, so they are replaced or removed rather
-// than treated as a working install.
-const LEGACY_MARKER = "plan-storage";
-
 const HOOK_SCRIPT = `#!/bin/sh
 # agent-plan: auto-commit plan changes
 # Installed by 'apl init --auto-commit'. Remove with 'apl init --no-auto-commit'.
@@ -66,15 +61,10 @@ function isEmptyHook(contents: string): boolean {
 
 export async function installAutoCommitHook(repoRoot: string): Promise<void> {
   const hookPath = await postCommitHookPath(repoRoot);
-  let existing = await readHookIfExists(hookPath);
+  const existing = await readHookIfExists(hookPath);
 
   if (existing?.includes(MARKER)) {
     return;
-  }
-
-  if (existing?.includes(LEGACY_MARKER)) {
-    const withoutLegacy = removeSection(existing, LEGACY_MARKER);
-    existing = isEmptyHook(withoutLegacy) ? undefined : withoutLegacy;
   }
 
   if (existing === undefined) {
@@ -98,12 +88,11 @@ export async function removeAutoCommitHook(repoRoot: string): Promise<void> {
   const hookPath = await postCommitHookPath(repoRoot);
   const existing = await readHookIfExists(hookPath);
 
-  const installedMarker = [MARKER, LEGACY_MARKER].find((marker) => existing?.includes(marker));
-  if (existing === undefined || installedMarker === undefined) {
+  if (existing === undefined || !existing.includes(MARKER)) {
     return;
   }
 
-  const withoutSection = removeSection(existing, installedMarker);
+  const withoutSection = removeSection(existing, MARKER);
 
   if (isEmptyHook(withoutSection)) {
     await rm(hookPath, { force: true });

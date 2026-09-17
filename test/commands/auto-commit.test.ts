@@ -14,21 +14,6 @@ async function hookPath(repoDir: string): Promise<string> {
   return path.join(absoluteGitDir, "hooks", "post-commit");
 }
 
-const LEGACY_HOOK_SECTION = `# plan-storage auto-commit hook
-# plan-storage: auto-commit plan changes
-if command -v plan >/dev/null 2>&1; then
-  plan commit -m "Auto-commit" 2>/dev/null || true
-fi
-`;
-
-async function writeHook(repoDir: string, contents: string): Promise<string> {
-  const hook = await hookPath(repoDir);
-  await mkdir(path.dirname(hook), { recursive: true });
-  await writeFile(hook, contents);
-  await chmod(hook, 0o755);
-  return hook;
-}
-
 describe("auto-commit hook", () => {
   test("installAutoCommitHook creates an executable post-commit hook", async () => {
     const repo = await createTestRepo();
@@ -122,82 +107,6 @@ describe("auto-commit hook", () => {
       const afterRemove = await readFile(hook, "utf8");
       expect(afterRemove).toContain("existing hook ran");
       expect(afterRemove).not.toContain("agent-plan");
-    } finally {
-      await repo.cleanup();
-    }
-  });
-
-  test("installAutoCommitHook replaces a hook installed under the legacy plan-storage name", async () => {
-    const repo = await createTestRepo();
-
-    try {
-      const hook = await writeHook(
-        repo.dir,
-        `#!/bin/sh\necho 'existing hook ran'\n\n${LEGACY_HOOK_SECTION}`,
-      );
-
-      await installAutoCommitHook(repo.dir);
-
-      const contents = await readFile(hook, "utf8");
-      expect(contents).toContain("existing hook ran");
-      expect(contents).toContain("agent-plan");
-      expect(contents).not.toContain("plan-storage");
-    } finally {
-      await repo.cleanup();
-    }
-  });
-
-  test("installAutoCommitHook leaves an unrelated hook without the legacy marker intact", async () => {
-    const repo = await createTestRepo();
-
-    try {
-      const hook = await writeHook(repo.dir, "#!/bin/sh\necho 'existing hook ran'\n");
-
-      await installAutoCommitHook(repo.dir);
-
-      const contents = await readFile(hook, "utf8");
-      expect(contents).toContain("existing hook ran");
-      expect(contents).toContain("agent-plan");
-    } finally {
-      await repo.cleanup();
-    }
-  });
-
-  test("removeAutoCommitHook deletes a standalone hook installed under the legacy plan-storage name", async () => {
-    const repo = await createTestRepo();
-
-    try {
-      const hook = await writeHook(
-        repo.dir,
-        `#!/bin/sh\n${LEGACY_HOOK_SECTION.split("\n").slice(1).join("\n")}`,
-      );
-
-      await removeAutoCommitHook(repo.dir);
-
-      const fileExists = await stat(hook).then(
-        () => true,
-        () => false,
-      );
-      expect(fileExists).toBe(false);
-    } finally {
-      await repo.cleanup();
-    }
-  });
-
-  test("removeAutoCommitHook strips only the legacy section from a shared hook", async () => {
-    const repo = await createTestRepo();
-
-    try {
-      const hook = await writeHook(
-        repo.dir,
-        `#!/bin/sh\necho 'existing hook ran'\n\n${LEGACY_HOOK_SECTION}`,
-      );
-
-      await removeAutoCommitHook(repo.dir);
-
-      const contents = await readFile(hook, "utf8");
-      expect(contents).toContain("existing hook ran");
-      expect(contents).not.toContain("plan-storage");
     } finally {
       await repo.cleanup();
     }

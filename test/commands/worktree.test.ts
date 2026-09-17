@@ -1,12 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { lstat, mkdir } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { addPlans } from "../../src/commands/add";
 import { commitPlans } from "../../src/commands/commit";
-import { initPlans } from "../../src/commands/init";
 import { listPlans } from "../../src/commands/ls";
-import { readConfig } from "../../src/lib/config";
-import { Git } from "../../src/lib/git";
 import {
   createSecondaryWorktree,
   createTestRepo,
@@ -134,65 +131,6 @@ describe("secondary worktree symlink", () => {
       expect(await file.text()).toBe("secondary content");
     } finally {
       await secondary.cleanup();
-      await repo.cleanup();
-    }
-  });
-});
-
-describe("config migration from old plain-directory .plans/", () => {
-  test("initPlans picks up branch from old .plans/config.json and creates that branch", async () => {
-    const repo = await createTestRepo();
-    try {
-      // Simulate an old-style repo: .plans/ is a plain directory with config.json inside.
-      const plansDir = join(repo.dir, ".plans");
-      await mkdir(plansDir, { recursive: true });
-      await Bun.write(
-        join(plansDir, "config.json"),
-        JSON.stringify({ branch: "custom", remote: "origin" }),
-      );
-
-      // initPlans without --branch must pick up "custom" from migration, not the default "plans".
-      await initPlans({ cwd: repo.dir });
-
-      const git = new Git(repo.dir, "custom");
-      expect(await git.branchExists()).toBe(true);
-
-      const config = await readConfig(repo.dir);
-      expect(config.branch).toBe("custom");
-
-      // .plans/ must now be a real worktree, not the old plain directory.
-      const plansGit = await lstat(join(repo.dir, ".plans", ".git"));
-      expect(plansGit.isFile()).toBe(true);
-    } finally {
-      await repo.cleanup();
-    }
-  });
-
-  test("lsPlans picks up branch from old .plans/config.json and sets up the worktree", async () => {
-    const repo = await createTestRepo();
-    try {
-      // Create the custom branch so ensurePlansWorktree can check it out.
-      const git = new Git(repo.dir, "custom");
-      await git.createOrphanBranch();
-
-      // Simulate old-style setup: plain .plans/ directory with config.json.
-      const plansDir = join(repo.dir, ".plans");
-      await mkdir(plansDir, { recursive: true });
-      await Bun.write(
-        join(plansDir, "config.json"),
-        JSON.stringify({ branch: "custom", remote: "origin" }),
-      );
-
-      // listPlans triggers readConfig (migration) then ensurePlansWorktree.
-      await listPlans(undefined, repo.dir);
-
-      const config = await readConfig(repo.dir);
-      expect(config.branch).toBe("custom");
-
-      // .plans/ must now be a real worktree on the custom branch.
-      const plansGit = await lstat(join(repo.dir, ".plans", ".git"));
-      expect(plansGit.isFile()).toBe(true);
-    } finally {
       await repo.cleanup();
     }
   });

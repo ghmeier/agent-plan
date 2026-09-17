@@ -186,10 +186,8 @@ describe("syncPlans", () => {
   });
 
   test("init from remote branch produces shared history so sync succeeds without divergence", async () => {
-    // Regression: two independent `apl init` calls used to create unrelated orphan
-    // commits whose timestamps differed. Push from the second repo would then fail
-    // because histories were unrelated. This test forces a timestamp difference by
-    // committing a file before the second init, which produces a different parent SHA.
+    // Two separately created orphan branches have unrelated histories, and pushing
+    // one over the other fails. Init must build on the remote branch instead.
     const repoA = await createTestRepoWithPlans();
     const repoB = await createTestRepo();
     const bare = await createBareRemote();
