@@ -1,6 +1,6 @@
 ---
 title: CLI Flow Tests
-status: active
+status: completed
 tags:
   - tests
 created: 2026-09-17
@@ -45,3 +45,25 @@ Replace the current tests, which import command functions and internal library m
 - `bun test`, `bun run typecheck`, and `bun run lint` pass.
 - Every behavior in the removed tests maps to a flow test, or is dropped on purpose because it only checked internals.
 - Suite time stays near the current ~23 seconds.
+
+## Outcome
+
+Implemented on branch `cli-flow-tests` (worktree `agent-plan.cli-flow-tests`), not yet committed.
+
+- The suite is now 96 tests in six files (`init`, `authoring`, `reading`, `sync`, `checkouts`, `completion`) plus `test/harness.ts`. Nothing under `test/` imports from `src/`.
+- `bunfig.toml` runs every test file concurrently. The suite takes about 13 seconds, down from 23, and passed four runs in a row with no flakes.
+- Tests planned as `worktrees.test.ts` and an auto-commit file were combined into `checkouts.test.ts`.
+
+### Bugs found by driving the real CLI
+
+1. **`apl show --version <ref>` never worked.** The program-wide `-V, --version` flag consumes `--version` even after the subcommand, so the CLI prints `0.1.0`. Fixing it means either renaming the `show` flag (for example `--at <ref>`) or enabling positional options, which would stop `apl ls --no-color` from parsing. Left for a decision. The two tests covering it are marked `test.failing`.
+2. **The `--auto-commit` hook never committed anything.** Git runs hooks with `GIT_INDEX_FILE=.git/index`; inside `.plans/`, `.git` is a file, so `apl commit` failed and the hook's `2>/dev/null || true` hid the error. Fixed in `src/lib/hooks.ts` by unsetting `GIT_DIR`, `GIT_WORK_TREE`, and `GIT_INDEX_FILE` before calling `apl`. Hooks that are already installed keep the broken script until someone runs `apl init --no-auto-commit` and then `apl init --auto-commit`.
+
+### Noted, not changed
+
+- Because `.plans/` is a worktree of the same repo, it shares `.git/hooks`. Every plan commit runs the user's own `post-commit` hook, and the auto-commit hook calls itself once more (the nested call finds nothing to commit).
+- `apl completion fish --install` fails if `~/.config/fish/` does not exist yet.
+
+### Dropped on purpose
+
+Checks that only covered internals: the `Git` class, config file location, hook file contents and idempotence, the `.plans` entry in `info/exclude`, the `__complete` fallback when `.plans/` is missing, and substring checks on completion script text (real-shell completion tests now cover the scripts).
