@@ -1,7 +1,7 @@
 import { appendFile, lstat, readFile, realpath, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 import type { PlanConfig } from "../types";
-import { NotInitializedError } from "./errors";
+import { NotInitializedError, PlansPathOccupiedError } from "./errors";
 import { Git } from "./git";
 import { getGitCommonDir, getMainWorktreeRoot, getPlansDir } from "./paths";
 
@@ -10,6 +10,15 @@ async function realpathSafe(p: string): Promise<string> {
     return await realpath(p);
   } catch {
     return p;
+  }
+}
+
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await lstat(p);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -60,16 +69,8 @@ async function addWorktreeDir(repoRoot: string, plansDir: string, branch: string
     return;
   }
 
-  // Remove any stale entry that would block `git worktree add`.
-  let existing: Awaited<ReturnType<typeof lstat>> | null = null;
-  try {
-    existing = await lstat(plansDir);
-  } catch {
-    // no-op
-  }
-
-  if (existing !== null) {
-    await rm(plansDir, { recursive: true, force: true });
+  if (await pathExists(plansDir)) {
+    throw new PlansPathOccupiedError(plansDir);
   }
 
   await git.exec(["worktree", "add", plansDir, branch]);
@@ -130,15 +131,15 @@ export async function ensurePlansWorktree(
     }
 
     if (existingLstat !== null) {
-      if (existingLstat.isSymbolicLink()) {
-        const resolved = await realpathSafe(plansDir);
-        if (resolved === (await realpathSafe(mainPlansDir))) {
-          return;
-        }
-        await rm(plansDir);
-      } else {
-        await rm(plansDir, { recursive: true, force: true });
+      if (!existingLstat.isSymbolicLink()) {
+        throw new PlansPathOccupiedError(plansDir);
       }
+      const resolved = await realpathSafe(plansDir);
+      if (resolved === (await realpathSafe(mainPlansDir))) {
+        return;
+      }
+      // Only the link itself is removed; the directory it pointed to is untouched.
+      await rm(plansDir);
     }
 
     await symlink(mainPlansDir, plansDir);

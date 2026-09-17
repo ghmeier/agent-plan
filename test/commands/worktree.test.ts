@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { lstat } from "node:fs/promises";
+import { lstat, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { addPlans } from "../../src/commands/add";
 import { commitPlans } from "../../src/commands/commit";
+import { initPlans } from "../../src/commands/init";
 import { listPlans } from "../../src/commands/ls";
 import {
   createSecondaryWorktree,
@@ -150,6 +151,42 @@ describe("config is not committed to the plans branch", () => {
 
       expect(tree).not.toContain("config.json");
     } finally {
+      await repo.cleanup();
+    }
+  });
+});
+
+describe("existing .plans that is not managed by apl", () => {
+  test("init in the main checkout fails and keeps a plain .plans/ directory intact", async () => {
+    const repo = await createTestRepo();
+    try {
+      const userFile = join(repo.dir, ".plans", "notes.md");
+      await mkdir(join(repo.dir, ".plans"));
+      await Bun.write(userFile, "my notes");
+
+      const init = initPlans({ cwd: repo.dir });
+
+      await expect(init).rejects.toThrow(".plans");
+      expect(await Bun.file(userFile).text()).toBe("my notes");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("a secondary checkout fails and keeps a plain .plans/ directory intact", async () => {
+    const repo = await createTestRepoWithPlans();
+    const secondary = await createSecondaryWorktree(repo.dir);
+    try {
+      const userFile = join(secondary.dir, ".plans", "notes.md");
+      await mkdir(join(secondary.dir, ".plans"));
+      await Bun.write(userFile, "my notes");
+
+      const list = listPlans(undefined, secondary.dir, { short: true });
+
+      await expect(list).rejects.toThrow(".plans");
+      expect(await Bun.file(userFile).text()).toBe("my notes");
+    } finally {
+      await secondary.cleanup();
       await repo.cleanup();
     }
   });

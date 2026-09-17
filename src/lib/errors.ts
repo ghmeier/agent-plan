@@ -28,3 +28,12 @@ export class FileNotFoundError extends AgentPlanError {
     this.name = "FileNotFoundError";
   }
 }
+
+export class PlansPathOccupiedError extends AgentPlanError {
+  constructor(path: string) {
+    super(
+      `${path} already exists and is not managed by apl. Move or remove it, then run the command again.`,
+    );
+    this.name = "PlansPathOccupiedError";
+  }
+}
