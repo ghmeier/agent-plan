@@ -31,7 +31,7 @@ AI coding workflows generate a steady stream of research docs, plans, and handof
 
 ## How It Works
 
-Docs live on an independent orphan branch (default: `apl`), checked out as a git worktree inside the shared git directory at `.git/agent-plan/worktree`. Every checkout of the repo gets a `.apl` symlink to it, and it is listed in `.git/info/exclude` so the code repo never sees it. Agents and editors read and write files under `.apl/` with normal file I/O. `apl commit` stages and commits whatever changed. Because the branch is pushed to the same remote as your code, teammates get docs automatically on fetch, with no extra remote or auth setup.
+Docs live on an independent orphan branch (default: `apl`), checked out as a git worktree at `.apl` in the main checkout. Every other checkout (from `git worktree add`) gets a `.apl` symlink to it, and `.apl` is listed in `.git/info/exclude` so the code repo never sees it. The store stays out of `.git/` because Claude Code asks for approval before every write there, even through a symlink, and no permission rule can pre-approve it. A bare repo has no main checkout, so its store stays at `.git/agent-plan/worktree`. Agents and editors read and write files under `.apl/` with normal file I/O. `apl commit` stages and commits whatever changed. Because the branch is pushed to the same remote as your code, teammates get docs automatically on fetch, with no extra remote or auth setup.
 
 Because the worktree belongs to no single checkout, every checkout (from `git worktree add` or a tool like `wt`) shares the same files and commits to the same branch, and removing or moving any checkout leaves the docs intact. Any apl command creates the `.apl` link in a checkout that lacks one. If an agent already wrote files into a plain `.apl/` directory there, apl moves them into the store first.
 
@@ -204,7 +204,8 @@ Other keys are kept as written. Stamping changes only the `created` and `updated
 
 - **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit. `apl new` prints the path to write to.
 - **Structured output**: `show`, `ls`, `log`, `diff`, `status`, `types`, and `new` support `--json`, and output is uncolored when it isn't going to a terminal.
-- **Finding docs**: `.apl` is git-ignored and a symlink, so ripgrep-based search tools skip it unless given the path explicitly (for example Grep with `path: ".apl"`).
+- **Finding docs**: `.apl` is git-ignored (and a symlink outside the main checkout), so ripgrep-based search tools skip it unless given the path explicitly (for example Grep with `path: ".apl"`).
+- **Editing from other checkouts**: in a checkout made with `git worktree add`, `.apl` links to the main checkout, which is outside that session's working directory. Claude Code asks before writing there unless an allow rule such as `Edit(//path/to/main-checkout/.apl/**)` matches, or the main checkout's `.apl` is added with `/add-dir` or `additionalDirectories`.
 
 ### Claude Code setup
 

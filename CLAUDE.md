@@ -19,7 +19,7 @@ Releases are published to npm as `@ghmeier/agent-plan` by `.github/workflows/pub
 ## Layout
 
 - `src/index.ts`: commander setup. Each command lives in `src/commands/<name>.ts` and exports `register<Name>(program)`.
-- `src/lib/worktree.ts`: `ensureStore`, the core invariant. The docs branch is checked out once, at `<git-common-dir>/agent-plan/worktree` (the store), and every checkout gets a `.apl` symlink to it. Commands call `ensureStore` first and use the path it returns, never the `.apl` link.
+- `src/lib/worktree.ts`: `ensureStore`, the core invariant. The docs branch is checked out once, at `.apl` in the main checkout (the store), and every other checkout gets a `.apl` symlink to it. It stays out of `.git/` because Claude Code prompts on every write there; bare repos fall back to `<git-common-dir>/agent-plan/worktree`. Commands call `ensureStore` first and use the path it returns, never the `.apl` link.
 - `src/lib/paths.ts`: repo root discovery (which maps the store itself back to a checkout), store paths, and `resolvePlanPath` (maps a user path to its path in the store).
 - `src/lib/config.ts`: config is JSON at `<git-common-dir>/agent-plan/config.json`, shared by all checkouts and never committed.
 - `src/lib/doc-types.ts`: doc types. A doc's type is its top-level directory in the store; types come from a `config.json` committed on the docs branch, or the built-ins (`plan`, `research`, `handoff`). Also templates for `apl new`. Status validity depends on the type, so it's checked at display time (`withValidStatus`), never while parsing.

@@ -1,7 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { lstat, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { apl, createInitializedRepo, createRepo, createTempDir, git } from "./harness";
+import {
+  addOrigin,
+  addPlan,
+  apl,
+  createInitializedRepo,
+  createRemote,
+  createRepo,
+  createTempDir,
+  git,
+} from "./harness";
+
+const REMOTE_TEST_TIMEOUT_MS = 20_000;
 
 describe("apl init", () => {
   test("init creates a usable plans directory that the code repo ignores", async () => {
@@ -25,7 +36,16 @@ describe("apl init", () => {
 
     expect(result.exitCode).toBe(0);
     expect((await apl(repo.dir, ["ls", "--short"])).exitCode).toBe(0);
-    expect((await lstat(repo.storeDir)).isSymbolicLink()).toBe(true);
+    expect((await lstat(repo.storeDir)).isDirectory()).toBe(true);
+  });
+
+  test("init checks docs out in the main checkout, outside the git directory", async () => {
+    await using repo = await createRepo();
+
+    await apl(repo.dir, ["init"]);
+
+    expect((await lstat(repo.storeDir)).isSymbolicLink()).toBe(false);
+    expect(await git(repo.storeDir, ["branch", "--show-current"])).toBe("apl");
   });
 
   test("init on an initialized repo reports it and keeps existing plans", async () => {
@@ -67,9 +87,30 @@ describe("apl init", () => {
     const result = await apl(repo.dir, ["init"]);
 
     expect(result.exitCode).toBe(0);
-    expect((await lstat(repo.storeDir)).isSymbolicLink()).toBe(true);
+    expect(result.stderr).toContain("Moved 1 file(s)");
     expect((await apl(repo.dir, ["show", "notes.md", "--raw"])).stdout).toBe("my notes");
   });
+
+  test(
+    "init leaves an existing .apl directory alone when its files differ from the docs branch",
+    async () => {
+      await using repo = await createRepo();
+      await using remote = await createRemote();
+      await addOrigin(repo, remote);
+      await using teammate = await createInitializedRepo();
+      await addOrigin(teammate, remote);
+      await addPlan(teammate, "plan.md", "# Stored\n");
+      await apl(teammate.dir, ["sync"]);
+      await Bun.write(join(repo.storeDir, "plan.md"), "# Stray\n");
+
+      const result = await apl(repo.dir, ["init"]);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("differ from the store's copies: plan.md");
+      expect(await Bun.file(join(repo.storeDir, "plan.md")).text()).toBe("# Stray\n");
+    },
+    REMOTE_TEST_TIMEOUT_MS,
+  );
 
   test("init explains how to free a docs branch that another worktree has checked out", async () => {
     await using repo = await createRepo();

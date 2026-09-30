@@ -1,4 +1,15 @@
-import { appendFile, cp, lstat, mkdir, readdir, readFile, rm, symlink } from "node:fs/promises";
+import {
+  appendFile,
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  symlink,
+} from "node:fs/promises";
 import path from "node:path";
 import type { PlanConfig } from "../types";
 import { AgentPlanError, NotInitializedError, StorePathOccupiedError } from "./errors";
@@ -6,13 +17,16 @@ import { branchExists, execGit, gitPath, runGit } from "./git";
 import { warn } from "./output";
 import { getGitCommonDir, getStoreDir, getStoreLink, realpathSafe, STORE_LINK_NAME } from "./paths";
 
-async function pathExists(p: string): Promise<boolean> {
+async function lstatSafe(p: string): Promise<Awaited<ReturnType<typeof lstat>> | null> {
   try {
-    await lstat(p);
-    return true;
+    return await lstat(p);
   } catch {
-    return false;
+    return null;
   }
+}
+
+async function pathExists(p: string): Promise<boolean> {
+  return (await lstatSafe(p)) !== null;
 }
 
 interface WorktreeEntry {
@@ -81,12 +95,55 @@ async function addStoreWorktree(
     );
   }
 
-  if (await pathExists(storeDir)) {
+  const existing = await lstatSafe(storeDir);
+  if (existing?.isSymbolicLink()) {
+    // A link here points at some other store. Only the link itself is removed.
+    await rm(storeDir);
+  } else if (existing?.isDirectory() && !(await pathExists(path.join(storeDir, ".git")))) {
+    await checkOutOverStrayDirectory(repoRoot, storeDir, config.branch);
+    return;
+  } else if (existing) {
     throw new StorePathOccupiedError(storeDir);
   }
 
   await mkdir(path.dirname(storeDir), { recursive: true });
   await execGit(["worktree", "add", "--quiet", storeDir, config.branch], repoRoot);
+}
+
+/**
+ * Checks the docs branch out at the store path when a plain directory is
+ * already there, keeping the files in it. Agents write into `.apl/` in the
+ * main checkout before any apl command has created the store, and git
+ * refuses to check out into a non-empty directory. Refuses before moving
+ * anything when a file would overwrite different content on the branch.
+ */
+async function checkOutOverStrayDirectory(
+  repoRoot: string,
+  storeDir: string,
+  branch: string,
+): Promise<void> {
+  const files = await listFilesRecursive(storeDir);
+  await assertNoConflicts(storeDir, files, async (file) => {
+    const { exitCode, stdout } = await runGit(["show", `${branch}:${file}`], repoRoot);
+    return exitCode === 0 ? stdout : null;
+  });
+
+  const asideDir = await mkdtemp(path.join(await getGitCommonDir(repoRoot), "apl-stray-"));
+  const strayDir = path.join(asideDir, STORE_LINK_NAME);
+  await rename(storeDir, strayDir);
+  try {
+    await execGit(["worktree", "add", "--quiet", storeDir, branch], repoRoot);
+  } catch (err) {
+    await rename(strayDir, storeDir);
+    await rm(asideDir, { recursive: true });
+    throw err;
+  }
+
+  await cp(strayDir, storeDir, { recursive: true, force: true });
+  await rm(asideDir, { recursive: true });
+  if (files.length > 0) {
+    warn(`Moved ${files.length} file(s) from ${storeDir} into the docs store`);
+  }
 }
 
 async function listFilesRecursive(dir: string, base = dir): Promise<string[]> {
@@ -103,6 +160,32 @@ async function listFilesRecursive(dir: string, base = dir): Promise<string[]> {
 }
 
 /**
+ * Throws when any of `files` in `strayDir` differs from the store's copy.
+ * `readStored` returns the store's content for a file, or null when the
+ * store has no such file.
+ */
+async function assertNoConflicts(
+  strayDir: string,
+  files: string[],
+  readStored: (file: string) => Promise<string | null>,
+): Promise<void> {
+  const conflicts: string[] = [];
+  for (const file of files) {
+    const stored = await readStored(file);
+    if (stored === null) continue;
+    if (stored !== (await Bun.file(path.join(strayDir, file)).text())) conflicts.push(file);
+  }
+
+  if (conflicts.length > 0) {
+    throw new AgentPlanError(
+      `${strayDir} is a directory that isn't the docs store, and these files in it ` +
+        `differ from the store's copies: ${conflicts.join(", ")}. Move them out of the way, ` +
+        "then run the command again.",
+    );
+  }
+}
+
+/**
  * Moves files from a real `.apl/` directory into the store and replaces the
  * directory with the link. Agents write into `.apl/` in a fresh checkout
  * before any apl command has created the link there, and those files would
@@ -115,21 +198,10 @@ async function adoptStrayDirectory(linkPath: string, storeDir: string): Promise<
   }
 
   const files = await listFilesRecursive(linkPath);
-  const conflicts: string[] = [];
-  for (const file of files) {
+  await assertNoConflicts(linkPath, files, async (file) => {
     const existing = Bun.file(path.join(storeDir, file));
-    if (!(await existing.exists())) continue;
-    const incoming = await Bun.file(path.join(linkPath, file)).text();
-    if ((await existing.text()) !== incoming) conflicts.push(file);
-  }
-
-  if (conflicts.length > 0) {
-    throw new AgentPlanError(
-      `${linkPath} is a directory instead of a link to the docs store, and these files in it ` +
-        `differ from the store's copies: ${conflicts.join(", ")}. Move them out of the way, ` +
-        "then run the command again.",
-    );
-  }
+    return (await existing.exists()) ? existing.text() : null;
+  });
 
   await cp(linkPath, storeDir, { recursive: true, force: true });
   await rm(linkPath, { recursive: true });
@@ -140,16 +212,12 @@ async function adoptStrayDirectory(linkPath: string, storeDir: string): Promise<
 
 async function ensureStoreLink(repoRoot: string, storeDir: string): Promise<void> {
   const linkPath = getStoreLink(repoRoot);
+  // True in the main checkout, where `.apl` is the store itself, and in a
+  // checkout whose link is already correct.
+  if ((await realpathSafe(linkPath)) === (await realpathSafe(storeDir))) return;
 
-  let existing: Awaited<ReturnType<typeof lstat>> | null = null;
-  try {
-    existing = await lstat(linkPath);
-  } catch {
-    // Missing: created below.
-  }
-
+  const existing = await lstatSafe(linkPath);
   if (existing?.isSymbolicLink()) {
-    if ((await realpathSafe(linkPath)) === (await realpathSafe(storeDir))) return;
     // Only the link itself is removed; the directory it pointed to is untouched.
     await rm(linkPath);
   } else if (existing?.isDirectory()) {
@@ -163,8 +231,8 @@ async function ensureStoreLink(repoRoot: string, storeDir: string): Promise<void
 
 /**
  * Ensures the docs store is ready and returns its path: the docs branch
- * checked out in the shared git directory, and a `.apl` link to it in this
- * checkout. Throws NotInitializedError when the branch doesn't exist and
+ * checked out at `.apl` in the main checkout, and a `.apl` link to it in
+ * every other checkout. Throws NotInitializedError when the branch doesn't exist and
  * cannot be fetched from the configured remote. Pass `isInit = true` when
  * called from `init`, which is about to create the branch.
  */
@@ -173,16 +241,21 @@ export async function ensureStore(
   config: PlanConfig,
   isInit = false,
 ): Promise<string> {
-  const gitCommonDir = await getGitCommonDir(repoRoot);
-  const storeDir = getStoreDir(gitCommonDir);
+  const storeDir = await getStoreDir(repoRoot);
 
-  await ensureInfoExclude(gitCommonDir);
+  await ensureInfoExclude(await getGitCommonDir(repoRoot));
 
-  const resolvedStore = await realpathSafe(storeDir);
+  // Only the parent is resolved, so a symlink sitting at the store path, such
+  // as one to a store elsewhere, doesn't count as the store.
+  const storeInResolvedParent = path.join(
+    await realpathSafe(path.dirname(storeDir)),
+    path.basename(storeDir),
+  );
   const worktreePaths = await Promise.all(
     (await listWorktrees(repoRoot)).map((w) => realpathSafe(w.path)),
   );
-  if (!worktreePaths.includes(resolvedStore) || !(await pathExists(storeDir))) {
+  const existing = await lstatSafe(storeDir);
+  if (!worktreePaths.includes(storeInResolvedParent) || !existing || existing.isSymbolicLink()) {
     await addStoreWorktree(repoRoot, storeDir, config, isInit);
   }
 

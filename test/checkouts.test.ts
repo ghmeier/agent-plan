@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chmod, lstat, mkdir, realpath, rm } from "node:fs/promises";
+import { chmod, lstat, mkdir, realpath, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
   addPlan,
@@ -42,6 +42,28 @@ describe("multiple checkouts of one repo", () => {
     expect(result.exitCode).toBe(0);
     expect((await apl(secondary.dir, ["diff"])).stdout).toBe("No changes\n");
     expect(await planLogMessages(secondary, ["-n", "1"])).toEqual(["Commit draft"]);
+  });
+
+  test("a secondary checkout's .apl links to the main checkout's store", async () => {
+    await using main = await createInitializedRepo();
+    await using secondary = await createSecondaryCheckout(main);
+
+    await apl(secondary.dir, ["ls"]);
+
+    expect((await lstat(secondary.storeDir)).isSymbolicLink()).toBe(true);
+    expect(await realpath(secondary.storeDir)).toBe(await realpath(main.storeDir));
+  });
+
+  test("a main checkout whose .apl links to a store elsewhere is told to remove that store", async () => {
+    await using repo = await createInitializedRepo();
+    const elsewhere = join(repo.dir, ".git", "old-store");
+    await git(repo.dir, ["worktree", "move", ".apl", elsewhere]);
+    await symlink(elsewhere, repo.storeDir);
+
+    const result = await apl(repo.dir, ["ls"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(`git worktree remove ${await realpath(elsewhere)}`);
   });
 
   test("files written to .apl before any apl command in a new checkout are kept", async () => {

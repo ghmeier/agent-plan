@@ -12,7 +12,7 @@ import {
 } from "../lib/doc-types";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { runGit } from "../lib/git";
-import { findRepoRoot, getGitCommonDir, getStoreDir } from "../lib/paths";
+import { findRepoRoot, getStoreDir } from "../lib/paths";
 import { isDocPath, listMarkdownFiles } from "../lib/plan-files";
 
 async function safeRepoRoot(cwd?: string): Promise<string | null> {
@@ -56,7 +56,7 @@ async function completeFiles(prefix: string, cwd?: string): Promise<void> {
   const config = await safeConfig(repoRoot);
   if (!config) return;
 
-  const storeDir = getStoreDir(await getGitCommonDir(repoRoot));
+  const storeDir = await getStoreDir(repoRoot);
   let files: string[];
 
   if (await storeReady(storeDir)) {
@@ -118,7 +118,7 @@ async function completeTags(cwd?: string): Promise<void> {
   const config = await safeConfig(repoRoot);
   if (!config) return;
 
-  const storeDir = getStoreDir(await getGitCommonDir(repoRoot));
+  const storeDir = await getStoreDir(repoRoot);
   const tags = (await storeReady(storeDir))
     ? await readTagsFromWorktree(storeDir)
     : await readTagsFromBranch(repoRoot, config.branch);
@@ -131,7 +131,7 @@ async function loadTypes(cwd?: string): Promise<DocType[]> {
   const repoRoot = await safeRepoRoot(cwd);
   if (!repoRoot) return BUILTIN_TYPES;
 
-  const storeDir = getStoreDir(await getGitCommonDir(repoRoot));
+  const storeDir = await getStoreDir(repoRoot);
   if (await storeReady(storeDir)) return readDocTypes(storeDir);
 
   const config = await safeConfig(repoRoot);

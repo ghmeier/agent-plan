@@ -9,7 +9,7 @@ Plans, research, and handoffs live in `.apl/`, a directory shared by every check
 
 ## Find earlier work first
 
-`.apl` is git-ignored and a symlink, so Grep and Glob skip it unless you point them at it. Before writing a new doc, look for existing ones:
+`.apl` is git-ignored (and a symlink outside the main checkout), so Grep and Glob skip it unless you point them at it. Before writing a new doc, look for existing ones:
 
 - `apl ls --json` lists docs newest first with type, title, status, and tags. Narrow it with `--type plan`, `--status active`, or `--tag billing`.
 - Search content with Grep and `path: ".apl"`.

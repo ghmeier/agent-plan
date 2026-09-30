@@ -5,8 +5,8 @@ import { execGit, runGit } from "./git";
 
 /**
  * Returns the checkout that contains `startDir`. From inside the store
- * worktree itself (someone `cd`s into `.apl/`, whose real path is under
- * `.git/`), returns the main checkout instead, since the store is not a
+ * worktree itself (someone `cd`s into `.apl/`, which git sees as its own
+ * worktree), returns the main checkout instead, since the store is not a
  * checkout of the code.
  */
 export async function findRepoRoot(startDir?: string): Promise<string> {
@@ -15,7 +15,7 @@ export async function findRepoRoot(startDir?: string): Promise<string> {
   if (toplevel.exitCode !== 0) throw new NotARepoError();
 
   const root = toplevel.stdout.trim();
-  const storeDir = getStoreDir(await getGitCommonDir(root));
+  const storeDir = await getStoreDir(root);
   if ((await realpathSafe(root)) === (await realpathSafe(storeDir))) {
     return getMainWorktreeRoot(root);
   }
@@ -67,12 +67,17 @@ export function getStoreLink(repoRoot: string): string {
 }
 
 /**
- * The store worktree, where the docs branch is checked out. It lives in the
- * shared git directory so it belongs to no single checkout: every checkout
- * links to it, and removing or moving any checkout leaves it intact.
+ * The store worktree, where the docs branch is checked out: `.apl` in the
+ * main checkout, which every other checkout links to. It stays out of the
+ * git directory because Claude Code asks before every write under `.git/`,
+ * even through a symlink, and no permission rule can pre-approve that. A
+ * bare repo has no main checkout, so its store falls back to the git
+ * directory.
  */
-export function getStoreDir(gitCommonDir: string): string {
-  return path.join(gitCommonDir, "agent-plan", "worktree");
+export async function getStoreDir(repoRoot: string): Promise<string> {
+  const main = await getMainWorktree(repoRoot);
+  if (main.bare) return path.join(await getGitCommonDir(repoRoot), "agent-plan", "worktree");
+  return path.join(main.path, STORE_LINK_NAME);
 }
 
 /** Returns the absolute path to the shared git directory (same as .git in main checkout,
@@ -81,12 +86,19 @@ export async function getGitCommonDir(repoRoot: string): Promise<string> {
   return execGit(["rev-parse", "--path-format=absolute", "--git-common-dir"], repoRoot);
 }
 
+/** The main worktree: the first entry from `git worktree list`, which is the git directory itself in a bare repo. */
+async function getMainWorktree(repoRoot: string): Promise<{ path: string; bare: boolean }> {
+  const output = await execGit(["worktree", "list", "--porcelain"], repoRoot);
+  const [firstEntry = ""] = output.split("\n\n");
+  const lines = firstEntry.split("\n");
+  const worktreeLine = lines.find((l) => l.startsWith("worktree "));
+  if (!worktreeLine) throw new Error(`Could not find main worktree from ${repoRoot}`);
+  return { path: worktreeLine.slice("worktree ".length).trim(), bare: lines.includes("bare") };
+}
+
 /** Returns the root directory of the main worktree (the first entry from `git worktree list`). */
 export async function getMainWorktreeRoot(repoRoot: string): Promise<string> {
-  const output = await execGit(["worktree", "list", "--porcelain"], repoRoot);
-  const firstLine = output.split("\n").find((l) => l.startsWith("worktree "));
-  if (!firstLine) throw new Error(`Could not find main worktree from ${repoRoot}`);
-  return firstLine.slice("worktree ".length).trim();
+  return (await getMainWorktree(repoRoot)).path;
 }
 
 /** Returns the path to the config file stored inside the shared git directory. */

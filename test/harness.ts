@@ -1,6 +1,6 @@
-import { chmod, cp, mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 const CLI_ENTRY = join(import.meta.dir, "..", "src", "index.ts");
 
@@ -158,17 +158,16 @@ export function createRepo(): Promise<Repo> {
 /** A git repo where `apl init` has already run. */
 export async function createInitializedRepo(): Promise<Repo> {
   const repo = await copyTemplate(initializedRepoTemplate);
-  // The copied store worktree and `.apl` link still point at the template by
-  // absolute path. Left alone, writes through `.apl` would land in the template.
-  // Both halves of the worktree link are rewritten by hand: `git worktree
-  // repair` follows the store's stale `.git` file back to the template and,
-  // on some git versions, re-points the template's store at this copy.
-  const store = join(repo.dir, ".git", "agent-plan", "worktree");
-  const adminDir = join(repo.dir, ".git", "worktrees", "worktree");
-  await Bun.write(join(store, ".git"), `gitdir: ${adminDir}\n`);
-  await Bun.write(join(adminDir, "gitdir"), `${join(store, ".git")}\n`);
-  await rm(repo.storeDir);
-  await symlink(store, repo.storeDir);
+  // The copied store worktree still points at the template by absolute path.
+  // Left alone, commits in the store would land in the template's repo. Both
+  // halves of the worktree link are rewritten by hand: `git worktree repair`
+  // follows the store's stale `.git` file back to the template and, on some
+  // git versions, re-points the template's store at this copy.
+  const storeGitFile = join(repo.storeDir, ".git");
+  const templateAdminDir = (await Bun.file(storeGitFile).text()).replace(/^gitdir: /, "").trim();
+  const adminDir = join(repo.dir, ".git", "worktrees", basename(templateAdminDir));
+  await Bun.write(storeGitFile, `gitdir: ${adminDir}\n`);
+  await Bun.write(join(adminDir, "gitdir"), `${storeGitFile}\n`);
   return repo;
 }
 
