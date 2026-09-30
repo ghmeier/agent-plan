@@ -6,6 +6,7 @@ import { registerCommit } from "./commands/commit";
 import { registerComplete } from "./commands/complete";
 import { registerCompletion } from "./commands/completion";
 import { registerDiff } from "./commands/diff";
+import { registerHook } from "./commands/hook";
 import { registerInit } from "./commands/init";
 import { registerLog } from "./commands/log";
 import { registerLs } from "./commands/ls";
@@ -46,6 +47,7 @@ registerDiff(program);
 registerTypes(program);
 registerCompletion(program);
 registerComplete(program);
+registerHook(program);
 
 program.parseAsync().catch((err) => {
   if (err instanceof AgentPlanError) {

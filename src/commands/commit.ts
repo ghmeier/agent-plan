@@ -2,10 +2,35 @@ import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { stampTimestamps } from "../lib/frontmatter";
-import { execGit, runGit } from "../lib/git";
-import { info, success } from "../lib/output";
+import { execGit, runGit, SKIP_CODE_HOOKS } from "../lib/git";
+import { info, success, warn } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 import { assertNoOperationInProgress, ensureStore } from "../lib/worktree";
+
+/**
+ * The store is for prose. Hooks commit and push after every agent turn, so
+ * without a limit a data dump an agent saves next to its notes would be
+ * pushed to the shared remote, where it stays in history for good.
+ */
+const MAX_COMMITTED_FILE_BYTES = 1024 * 1024;
+
+async function unstageLargeFiles(storeDir: string): Promise<void> {
+  const { stdout } = await runGit(
+    ["diff", "--cached", "--name-only", "-z", "--diff-filter=AM"],
+    storeDir,
+  );
+  const large: string[] = [];
+  for (const relPath of stdout.split("\0").filter(Boolean)) {
+    if (Bun.file(join(storeDir, relPath)).size > MAX_COMMITTED_FILE_BYTES) large.push(relPath);
+  }
+  if (large.length === 0) return;
+
+  await execGit(["reset", "-q", "--", ...large], storeDir);
+  warn(
+    `Not committing files over 1 MB: ${large.join(", ")}. ` +
+      "Keep large data outside .apl/, or commit it on purpose with 'apl add'.",
+  );
+}
 
 /**
  * Stages all changes with `git add -A`, stamps updated timestamps into
@@ -14,6 +39,7 @@ import { assertNoOperationInProgress, ensureStore } from "../lib/worktree";
  */
 async function stageAndStamp(storeDir: string): Promise<boolean> {
   await execGit(["add", "-A"], storeDir);
+  await unstageLargeFiles(storeDir);
 
   // List added/modified markdown files in the index using NUL-delimited output
   // so paths with spaces or special characters are handled correctly.
@@ -81,7 +107,7 @@ export async function commitPlans(options: CommitOptions = {}): Promise<boolean>
   }
 
   const message = options.message ?? (await defaultMessage(storeDir));
-  await execGit(["commit", "-m", message], storeDir);
+  await execGit(["commit", SKIP_CODE_HOOKS, "-m", message], storeDir);
 
   if (!options.quiet) success("Committed doc changes");
   return true;

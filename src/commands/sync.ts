@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { AgentPlanError } from "../lib/errors";
-import { runGit } from "../lib/git";
+import { runGit, SKIP_CODE_HOOKS } from "../lib/git";
 import { info, success } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 import {
@@ -50,7 +50,12 @@ export async function syncPlans(options: SyncOptions = {}): Promise<void> {
   }
 
   const push = await runGit(
-    ["push", config.remote, `refs/heads/${config.branch}:refs/heads/${config.branch}`],
+    [
+      "push",
+      SKIP_CODE_HOOKS,
+      config.remote,
+      `refs/heads/${config.branch}:refs/heads/${config.branch}`,
+    ],
     repoRoot,
   );
   if (push.exitCode !== 0) {

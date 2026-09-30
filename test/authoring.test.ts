@@ -22,11 +22,13 @@ async function showMeta(repo: Repo, planPath: string): Promise<Record<string, un
   return JSON.parse((await apl(repo.dir, ["show", planPath, "--json"])).stdout).meta;
 }
 
-/** A shared pre-commit hook that rejects commits apl makes, leaving code commits alone. */
-async function installRejectingPreCommitHook(repo: Repo): Promise<void> {
-  const hookPath = join(repo.dir, ".git", "hooks", "pre-commit");
-  await Bun.write(hookPath, '#!/bin/sh\n[ -n "$APL_INTERNAL" ] && exit 1\nexit 0\n');
-  await chmod(hookPath, 0o755);
+/** Hooks that fail every commit and push, like code-only hooks would in the store. */
+async function installFailingCodeHooks(repo: Repo): Promise<void> {
+  for (const hook of ["pre-commit", "pre-push"]) {
+    const hookPath = join(repo.dir, ".git", "hooks", hook);
+    await Bun.write(hookPath, "#!/bin/sh\necho 'code checks failed' >&2\nexit 1\n");
+    await chmod(hookPath, 0o755);
+  }
 }
 
 /**
@@ -145,10 +147,9 @@ describe("apl add", () => {
 
   test("add that fails to commit leaves nothing staged for the next commit", async () => {
     await using repo = await createInitializedRepo();
-    await installRejectingPreCommitHook(repo);
     await Bun.write(join(repo.dir, "plan.md"), "# Plan\n");
 
-    const add = await apl(repo.dir, ["add", "plan.md"]);
+    const add = await apl(repo.dir, ["add", "plan.md"], { env: { GIT_AUTHOR_DATE: "not a date" } });
 
     expect(add.exitCode).not.toBe(0);
     expect(await git(repo.storeDir, ["diff", "--cached", "--name-only"])).toBe("");
@@ -206,6 +207,32 @@ describe("editing plans in .apl/ and committing", () => {
     expect(await planLogMessages(repo, ["-n", "1"])).toEqual([
       "Update a.md, b.md, c.md and 2 more",
     ]);
+  });
+
+  test("add and commit skip the code repo's git hooks", async () => {
+    await using repo = await createInitializedRepo();
+    await installFailingCodeHooks(repo);
+    await Bun.write(join(repo.dir, "added.md"), "# Added\n");
+    await Bun.write(join(repo.storeDir, "edited.md"), "# Edited\n");
+
+    const add = await apl(repo.dir, ["add", "added.md"]);
+    const commit = await apl(repo.dir, ["commit"]);
+
+    expect(add.exitCode).toBe(0);
+    expect(commit.exitCode).toBe(0);
+    expect(await planLogMessages(repo, ["-n", "2"])).toEqual(["Update edited.md", "Add added.md"]);
+  });
+
+  test("commit leaves files over 1 MB uncommitted and says so", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.storeDir, "data.json"), "x".repeat(2 * 1024 * 1024));
+    await Bun.write(join(repo.storeDir, "notes.md"), "# Notes\n");
+
+    const result = await apl(repo.dir, ["commit"]);
+
+    expect(result.stderr).toContain("Not committing files over 1 MB: data.json");
+    expect(await git(repo.storeDir, ["ls-files"])).toBe("notes.md");
+    expect(await Bun.file(join(repo.storeDir, "data.json")).exists()).toBe(true);
   });
 
   test("commit handles file names with spaces", async () => {

@@ -11,6 +11,13 @@ export interface GitResult {
  */
 export const INTERNAL_ENV_VAR = "APL_INTERNAL";
 
+/**
+ * Passed to every commit and push apl makes. The store shares the code
+ * repo's hooks, and hooks written for code, such as the pre-commit
+ * framework's, fail or do pointless work on the docs branch.
+ */
+export const SKIP_CODE_HOOKS = "--no-verify";
+
 /** Runs git in `cwd` and returns its output without throwing on a non-zero exit. */
 export async function runGit(args: string[], cwd: string): Promise<GitResult> {
   const proc = Bun.spawn(["git", ...args], {

@@ -33,19 +33,19 @@ function byMostRecentlyUpdated(a: PlanEntry, b: PlanEntry): number {
   return a.file < b.file ? -1 : a.file > b.file ? 1 : 0;
 }
 
-export async function listPlans(
-  path?: string,
-  cwd?: string,
-  options: LsOptions = {},
-): Promise<string[]> {
-  const repoRoot = await findRepoRoot(cwd);
-  const config = await readConfig(repoRoot);
+export interface DocFilters {
+  path?: string;
+  status?: string;
+  tag?: string;
+  type?: string;
+}
 
-  const storeDir = await ensureStore(repoRoot, config);
+/** Docs in the store matching every given filter, most recently updated first. */
+export async function findDocs(storeDir: string, filters: DocFilters = {}): Promise<PlanEntry[]> {
   const types = await readDocTypes(storeDir);
-  const typeFilter = options.type ? findType(types, options.type) : null;
+  const typeFilter = filters.type ? findType(types, filters.type) : null;
 
-  const searchDir = path ? join(storeDir, path) : storeDir;
+  const searchDir = filters.path ? join(storeDir, filters.path) : storeDir;
   const allFiles = await listMarkdownFiles(searchDir, storeDir);
 
   const entries: PlanEntry[] = await Promise.all(
@@ -57,15 +57,23 @@ export async function listPlans(
     }),
   );
 
-  entries.sort(byMostRecentlyUpdated);
-
-  // Filters AND-combine: an entry must match every one that's given.
-  const filtered = entries.filter((entry) => {
+  return entries.sort(byMostRecentlyUpdated).filter((entry) => {
     if (typeFilter && entry.type !== typeFilter.name) return false;
-    if (options.status && entry.meta.status !== options.status) return false;
-    if (options.tag && !entry.meta.tags?.includes(options.tag)) return false;
+    if (filters.status && entry.meta.status !== filters.status) return false;
+    if (filters.tag && !entry.meta.tags?.includes(filters.tag)) return false;
     return true;
   });
+}
+
+export async function listPlans(
+  path?: string,
+  cwd?: string,
+  options: LsOptions = {},
+): Promise<string[]> {
+  const repoRoot = await findRepoRoot(cwd);
+  const config = await readConfig(repoRoot);
+  const storeDir = await ensureStore(repoRoot, config);
+  const filtered = await findDocs(storeDir, { ...options, path });
 
   const files = filtered.map((e) => e.file);
 

@@ -71,7 +71,9 @@ apl add --type research docs/notes.md    # stored at research/docs/notes.md
 
 ### `apl commit [-m <message>]`
 
-Stages and commits all pending changes in `.apl/`. Stamps `updated` timestamps into any modified markdown files that have frontmatter. The default message names the changed files.
+Stages and commits all pending changes in `.apl/`. Stamps `updated` timestamps into any modified markdown files that have frontmatter. The default message names the changed files. Files over 1 MB are left uncommitted with a warning, so data an agent saves next to its notes isn't pushed to the shared remote; use `apl add` to commit one on purpose.
+
+apl's commits and pushes skip the code repo's git hooks (`--no-verify`), since hooks written for code, like pre-commit's, don't apply to the docs branch.
 
 ```bash
 apl commit
@@ -208,10 +210,10 @@ Other keys are kept as written. Stamping changes only the `created` and `updated
 
 This repo is also a Claude Code plugin marketplace. The `agent-plan` plugin (in `plugins/agent-plan/`) bundles a skill that teaches agents to look for earlier docs, create them with `apl new`, publish with `apl sync`, and write handoffs, plus two hooks:
 
-- **SessionStart** runs `apl pull` and shows the agent open handoffs. It also creates the `.apl` link in a fresh checkout.
+- **SessionStart** runs `apl pull` and shows the agent open handoffs. It also creates the `.apl` link in a new worktree.
 - **Stop** runs `apl sync --if-changed` after each turn, which publishes doc edits and skips the network when there are none. A conflict is reported rather than resolved.
 
-With these hooks, the git post-commit hook (`apl init --auto-commit`) isn't needed. If `apl` isn't installed, the Stop hook does nothing and the SessionStart hook tells the agent how to install it.
+Both hooks do nothing in a repo whose clone has no docs branch yet, so the plugin can be enabled for your user without affecting other repos. Run `apl init` once in a clone to turn them on there. With these hooks, the git post-commit hook (`apl init --auto-commit`) isn't needed. If `apl` isn't installed, the Stop hook does nothing and the SessionStart hook tells the agent how to install it.
 
 To turn it on for everyone working in a repo, commit this to the repo's `.claude/settings.json`:
 
@@ -229,7 +231,12 @@ To turn it on for everyone working in a repo, commit this to the repo's `.claude
 
 Teammates are asked to install the marketplace the first time they trust the repo in Claude Code, and the plugin then updates itself. Each teammate still installs the CLI with `bun i -g @ghmeier/agent-plan@latest`.
 
-To try it without changing a repo's settings, run `/plugin marketplace add ghmeier/agent-plan` and then `/plugin install agent-plan@agent-plan` in Claude Code.
+To use it yourself without changing a repo's settings, install it for your user:
+
+```bash
+claude plugin marketplace add ghmeier/agent-plan
+claude plugin install agent-plan@agent-plan
+```
 
 ## Shell Completion
 

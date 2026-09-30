@@ -1,12 +1,12 @@
 {
-  "description": "Pull teammates' docs and show open handoffs at session start; publish doc edits when a turn ends.",
+  "description": "Pull teammates' docs and show open handoffs at session start; publish doc edits when a turn ends. Both do nothing in repos without an apl docs branch.",
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "command -v apl >/dev/null 2>&1 || { echo 'The apl CLI is not installed, so docs in .apl/ are unavailable. Tell the user to install it with: bun i -g @ghmeier/agent-plan@latest'; exit 0; }; apl pull --quiet; echo 'Open handoffs in .apl/:'; apl ls --type handoff --status open --short"
+            "command": "command -v apl >/dev/null 2>&1 || { echo 'The apl CLI is not installed, so docs in .apl/ are unavailable. Tell the user to install it with: bun i -g @ghmeier/agent-plan@latest'; exit 0; }; apl hook session-start"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "command -v apl >/dev/null 2>&1 || exit 0; apl sync --if-changed >/dev/null"
+            "command": "command -v apl >/dev/null 2>&1 || exit 0; apl hook stop >/dev/null"
           }
         ]
       }

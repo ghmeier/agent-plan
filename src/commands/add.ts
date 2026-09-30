@@ -5,7 +5,7 @@ import { readConfig } from "../lib/config";
 import { findType, readDocTypes } from "../lib/doc-types";
 import { FileNotFoundError, NotInitializedError } from "../lib/errors";
 import { stampTimestamps } from "../lib/frontmatter";
-import { branchExists, execGit, runGit } from "../lib/git";
+import { branchExists, execGit, runGit, SKIP_CODE_HOOKS } from "../lib/git";
 import { info, success } from "../lib/output";
 import { findRepoRoot, resolvePlanPath } from "../lib/paths";
 import { assertNoOperationInProgress, ensureStore } from "../lib/worktree";
@@ -68,7 +68,10 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
   }
 
   const message = options.message ?? `Add ${planPaths.join(", ")}`;
-  const commit = await runGit(["commit", "-m", message, "--", ...planPaths], storeDir);
+  const commit = await runGit(
+    ["commit", SKIP_CODE_HOOKS, "-m", message, "--", ...planPaths],
+    storeDir,
+  );
   if (commit.exitCode !== 0) {
     // Unstage so a later `apl commit` doesn't sweep these files in under its own message.
     await runGit(["reset", "-q", "--", ...planPaths], storeDir);
