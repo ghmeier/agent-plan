@@ -20,7 +20,8 @@ Run all three (test, typecheck, lint) before calling work done.
 - `src/lib/worktree.ts`: `ensureStore`, the core invariant. The docs branch is checked out once, at `<git-common-dir>/agent-plan/worktree` (the store), and every checkout gets a `.apl` symlink to it. Commands call `ensureStore` first and use the path it returns, never the `.apl` link.
 - `src/lib/paths.ts`: repo root discovery (which maps the store itself back to a checkout), store paths, and `resolvePlanPath` (maps a user path to its path in the store).
 - `src/lib/config.ts`: config is JSON at `<git-common-dir>/agent-plan/config.json`, shared by all checkouts and never committed.
-- `src/lib/frontmatter.ts`: YAML frontmatter parsing and `created`/`updated` stamping. Stamping only applies to files that already have frontmatter.
+- `src/lib/doc-types.ts`: doc types. A doc's type is its top-level directory in the store; types come from a `config.json` committed on the docs branch, or the built-ins (`plan`, `research`, `handoff`). Also templates for `apl new`. Status validity depends on the type, so it's checked at display time (`withValidStatus`), never while parsing.
+- `src/lib/frontmatter.ts`: YAML frontmatter parsing, and `setFrontmatterFields`, which edits only the lines for the keys it sets so everything else in a user's frontmatter survives. Never re-serialize a whole frontmatter block.
 - `src/lib/hooks.ts`: the optional post-commit auto-commit hook. It appends a marked section to an existing hook rather than overwriting it.
 - `src/commands/complete.ts` is the hidden backend for shell completion; `completion.ts` emits the bash/zsh/fish scripts that call it.
 
@@ -40,4 +41,4 @@ Tests are end-to-end: they drive the real CLI as a subprocess against throwaway 
 - Use helpers from `test/harness.ts` (`repo.storeDir` is the checkout's `.apl` link): `createInitializedRepo`, `createRepo`, `createRemote` + `addOrigin`, `createSecondaryCheckout`, `addPlan`, `apl(cwd, args)`, `git(cwd, args)`, `planLogMessages`. Clean up with `await using repo = ...`.
 - The harness strips inherited `GIT_*` variables and global git config, and puts an `apl` shim first on `PATH` so hooks and completion scripts call the code under test. Don't bypass `run()` when spawning processes in tests.
 - Tests run concurrently, so every test must build its own repos and share no state.
-- Group tests by user workflow (`authoring`, `reading`, `sync`, `checkouts`, `init`, `completion`), not by source file.
+- Group tests by user workflow (`authoring`, `reading`, `sync`, `checkouts`, `init`, `types`, `completion`), not by source file.

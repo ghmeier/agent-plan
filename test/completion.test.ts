@@ -7,8 +7,10 @@ import {
   createInitializedRepo,
   createRepo,
   createTempDir,
+  git,
   type Repo,
   run,
+  writeStoreConfig,
 } from "./harness";
 
 function hasCommand(command: string): boolean {
@@ -30,6 +32,13 @@ async function createRepoWithTaggedPlans(): Promise<Repo> {
   await addPlan(repo, "alpha.md", "---\nstatus: active\ntags: [cli, backend]\n---\n# Alpha\n");
   await addPlan(repo, "beta.md", "---\nstatus: draft\ntags: [docs]\n---\n# Beta\n");
   return repo;
+}
+
+/** A repo with `repo`'s docs branch fetched in, but no store checked out yet. */
+async function cloneWithoutStore(repo: Repo): Promise<Repo> {
+  const clone = await createRepo();
+  await git(clone.dir, ["fetch", repo.dir, "apl:apl"]);
+  return clone;
 }
 
 async function completeLines(cwd: string, args: string[]): Promise<string[]> {
@@ -119,7 +128,7 @@ describe("apl __complete", () => {
     expect(await completeLines(repo.dir, ["tags"])).toEqual(["backend", "cli", "docs"]);
   });
 
-  test("statuses lists the valid status values anywhere", async () => {
+  test("statuses lists the statuses of every built-in type outside a repo", async () => {
     await using temp = await createTempDir();
 
     expect(await completeLines(temp.dir, ["statuses"])).toEqual([
@@ -127,7 +136,37 @@ describe("apl __complete", () => {
       "active",
       "completed",
       "archived",
+      "final",
+      "open",
+      "picked-up",
+      "closed",
     ]);
+  });
+
+  test("statuses with a type lists only that type's statuses", async () => {
+    await using repo = await createRepoWithTaggedPlans();
+
+    expect(await completeLines(repo.dir, ["statuses", "handoff"])).toEqual([
+      "open",
+      "picked-up",
+      "closed",
+    ]);
+  });
+
+  test("types lists the configured types, read from the branch before the store exists", async () => {
+    await using repo = await createRepoWithTaggedPlans();
+    await writeStoreConfig(repo, { types: { adr: { statuses: ["proposed", "accepted"] } } });
+    await using clone = await cloneWithoutStore(repo);
+
+    expect(await completeLines(clone.dir, ["types"])).toEqual(["adr"]);
+    expect(await completeLines(clone.dir, ["statuses", "adr"])).toEqual(["proposed", "accepted"]);
+  });
+
+  test("files skips templates and other dot-directories", async () => {
+    await using repo = await createRepoWithTaggedPlans();
+    await Bun.write(join(repo.storeDir, ".templates", "plan.md"), "# Template\n");
+
+    expect(await completeLines(repo.dir, ["files"])).toEqual(["alpha.md", "beta.md"]);
   });
 
   test("versions lists short commit hashes, optionally for one file", async () => {
@@ -180,13 +219,39 @@ describe.skipIf(!HAS_BASH)("bash completion", () => {
   test.each([
     {
       line: ["apl", ""],
-      expected: ["init", "add", "commit", "sync", "log", "show", "ls", "diff", "completion"],
+      expected: [
+        "init",
+        "new",
+        "add",
+        "commit",
+        "sync",
+        "log",
+        "show",
+        "ls",
+        "diff",
+        "types",
+        "completion",
+      ],
     },
     { line: ["apl", "sh"], expected: ["show"] },
     { line: ["apl", "show", ""], expected: ["alpha.md", "beta.md"] },
     { line: ["apl", "show", "--"], expected: ["--at", "--raw", "--json"] },
-    { line: ["apl", "ls", "--"], expected: ["--json", "--short", "--status", "--tag"] },
-    { line: ["apl", "ls", "--status", ""], expected: ["draft", "active", "completed", "archived"] },
+    { line: ["apl", "ls", "--"], expected: ["--json", "--short", "--type", "--status", "--tag"] },
+    {
+      line: ["apl", "ls", "--status", ""],
+      expected: [
+        "draft",
+        "active",
+        "completed",
+        "archived",
+        "final",
+        "open",
+        "picked-up",
+        "closed",
+      ],
+    },
+    { line: ["apl", "ls", "--type", ""], expected: ["plan", "research", "handoff"] },
+    { line: ["apl", "new", ""], expected: ["plan", "research", "handoff"] },
     { line: ["apl", "ls", "--tag", ""], expected: ["backend", "cli", "docs"] },
   ])("completes $line", async ({ line, expected }) => {
     await using repo = await createRepoWithTaggedPlans();

@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
+import { readDocTypes, typeOf, withValidStatus } from "../lib/doc-types";
 import { AgentPlanError, FileNotFoundError } from "../lib/errors";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
 import { runGit } from "../lib/git";
@@ -43,21 +44,23 @@ export async function showPlan(
     ? await readFromHistory(storeDir, options.at, planPath)
     : await readFromWorktree(storeDir, planPath);
 
-  if (options.json) {
-    const { meta, content: body } = parseFrontmatter(content);
-    console.log(JSON.stringify({ path: planPath, content, meta, body }));
-    return content;
-  }
-
   if (options.raw) {
     process.stdout.write(content);
     return content;
   }
 
-  const { meta, content: body, hasFrontmatter } = parseFrontmatter(content);
+  const type = typeOf(planPath, await readDocTypes(storeDir));
+  const parsed = parseFrontmatter(content);
+  const meta = withValidStatus(parsed.meta, type, planPath);
+  const body = parsed.content;
 
-  if (hasFrontmatter) {
-    printMetaHeader(meta);
+  if (options.json) {
+    console.log(JSON.stringify({ path: planPath, type: type?.name ?? null, content, meta, body }));
+    return content;
+  }
+
+  if (parsed.hasFrontmatter) {
+    printMetaHeader(meta, type?.name);
     process.stdout.write(body);
   } else {
     process.stdout.write(content);
@@ -66,9 +69,10 @@ export async function showPlan(
   return content;
 }
 
-function printMetaHeader(meta: PlanMeta): void {
+function printMetaHeader(meta: PlanMeta, typeName: string | undefined): void {
   const lines: string[] = [];
 
+  if (typeName) lines.push(`${colors.bold("Type:")}    ${typeName}`);
   if (meta.title) lines.push(`${colors.bold("Title:")}   ${meta.title}`);
   if (meta.status) lines.push(`${colors.bold("Status:")}  ${meta.status}`);
   if (meta.tags?.length) lines.push(`${colors.bold("Tags:")}    ${meta.tags.join(", ")}`);

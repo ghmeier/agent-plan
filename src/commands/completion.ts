@@ -20,7 +20,7 @@ _apl_completions() {
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
   fi
 
-  local subcommands="init add commit sync log show ls diff completion"
+  local subcommands="init new add commit sync log show ls diff types completion"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=($(compgen -W "$subcommands" -- "$cur"))
@@ -59,8 +59,25 @@ _apl_completions() {
       case "$prev" in
         --status) COMPREPLY=($(compgen -W "$(apl __complete statuses 2>/dev/null)" -- "$cur")) ;;
         --tag)    COMPREPLY=($(compgen -W "$(apl __complete tags 2>/dev/null)" -- "$cur")) ;;
-        *)        COMPREPLY=($(compgen -W "--json --short --status --tag" -- "$cur")) ;;
+        --type)   COMPREPLY=($(compgen -W "$(apl __complete types 2>/dev/null)" -- "$cur")) ;;
+        *)        COMPREPLY=($(compgen -W "--json --short --type --status --tag" -- "$cur")) ;;
       esac
+      ;;
+    new)
+      case "$prev" in
+        --tag) COMPREPLY=($(compgen -W "$(apl __complete tags 2>/dev/null)" -- "$cur")) ;;
+        --title) ;;
+        *)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--title --tag --json" -- "$cur"))
+          elif [[ $COMP_CWORD -eq 2 ]]; then
+            COMPREPLY=($(compgen -W "$(apl __complete types 2>/dev/null)" -- "$cur"))
+          fi
+          ;;
+      esac
+      ;;
+    types)
+      COMPREPLY=($(compgen -W "--json" -- "$cur"))
       ;;
     init)
       COMPREPLY=($(compgen -W "--branch --auto-commit --no-auto-commit" -- "$cur"))
@@ -70,7 +87,19 @@ _apl_completions() {
         COMPREPLY=($(compgen -W "bash zsh fish --install" -- "$cur"))
       fi
       ;;
-    add|commit)
+    add)
+      case "$prev" in
+        --type) COMPREPLY=($(compgen -W "$(apl __complete types 2>/dev/null)" -- "$cur")) ;;
+        *)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "-m --type" -- "$cur"))
+          else
+            COMPREPLY=($(compgen -f -- "$cur"))
+          fi
+          ;;
+      esac
+      ;;
+    commit)
       COMPREPLY=($(compgen -W "-m" -- "$cur"))
       ;;
   esac
@@ -95,6 +124,7 @@ _apl() {
       local -a subcommands
       subcommands=(
         'init:Initialize doc storage'
+        'new:Create a doc from a template'
         'add:Add files to doc storage'
         'commit:Commit pending changes'
         'sync:Sync with remote'
@@ -102,6 +132,7 @@ _apl() {
         'show:Show a doc'
         'ls:List docs'
         'diff:Show uncommitted changes'
+        'types:List doc types'
         'completion:Print shell completion script'
       )
       _describe 'subcommand' subcommands
@@ -130,8 +161,20 @@ _apl() {
           _arguments \\
             '--json[Output in JSON format]' \\
             '--short[Filename-only output]' \\
+            '--type[Filter by doc type]:type:($(apl __complete types 2>/dev/null))' \\
             '--status[Filter by status]:status:($(apl __complete statuses 2>/dev/null))' \\
             '--tag[Filter by tag]:tag:($(apl __complete tags 2>/dev/null))'
+          ;;
+        new)
+          _arguments \\
+            '--title[Title for the doc]:title:()' \\
+            '*--tag[Tag to add]:tag:($(apl __complete tags 2>/dev/null))' \\
+            '--json[Output in JSON format]' \\
+            ':type:($(apl __complete types 2>/dev/null))' \\
+            ':name:()'
+          ;;
+        types)
+          _arguments '--json[Output in JSON format]'
           ;;
         init)
           _arguments \\
@@ -144,7 +187,13 @@ _apl() {
             '--install[Install completion to shell rc file]' \\
             ':shell:(bash zsh fish)'
           ;;
-        add|commit)
+        add)
+          _arguments \\
+            '-m[Commit message]:message:()' \\
+            '--type[Store under this doc type]:type:($(apl __complete types 2>/dev/null))' \\
+            '*:file:_files'
+          ;;
+        commit)
           _arguments '-m[Commit message]:message:()'
           ;;
       esac
@@ -164,6 +213,7 @@ complete -c apl -f
 
 # Subcommands
 complete -c apl -n '__fish_use_subcommand' -a init       -d 'Initialize doc storage'
+complete -c apl -n '__fish_use_subcommand' -a new        -d 'Create a doc from a template'
 complete -c apl -n '__fish_use_subcommand' -a add        -d 'Add files to doc storage'
 complete -c apl -n '__fish_use_subcommand' -a commit     -d 'Commit pending changes'
 complete -c apl -n '__fish_use_subcommand' -a sync       -d 'Sync with remote'
@@ -171,6 +221,7 @@ complete -c apl -n '__fish_use_subcommand' -a log        -d 'Show commit history
 complete -c apl -n '__fish_use_subcommand' -a show       -d 'Show a doc'
 complete -c apl -n '__fish_use_subcommand' -a ls         -d 'List docs'
 complete -c apl -n '__fish_use_subcommand' -a diff       -d 'Show uncommitted changes'
+complete -c apl -n '__fish_use_subcommand' -a types      -d 'List doc types'
 complete -c apl -n '__fish_use_subcommand' -a completion -d 'Print shell completion script'
 
 # show
@@ -193,10 +244,23 @@ complete -c apl -n '__fish_seen_subcommand_from ls' -l json   -d 'Output in JSON
 complete -c apl -n '__fish_seen_subcommand_from ls' -l short  -d 'Filename-only output'
 complete -c apl -n '__fish_seen_subcommand_from ls' -l status -d 'Filter by status'
 complete -c apl -n '__fish_seen_subcommand_from ls' -l tag    -d 'Filter by tag'
+complete -c apl -n '__fish_seen_subcommand_from ls' -l type   -d 'Filter by doc type'
+complete -c apl -n '__fish_seen_subcommand_from ls' -n '__fish_prev_arg_in --type' \\
+  -a '(apl __complete types 2>/dev/null)'
 complete -c apl -n '__fish_seen_subcommand_from ls' -n '__fish_prev_arg_in --status' \\
   -a '(apl __complete statuses 2>/dev/null)'
 complete -c apl -n '__fish_seen_subcommand_from ls' -n '__fish_prev_arg_in --tag' \\
   -a '(apl __complete tags 2>/dev/null)'
+
+# new
+complete -c apl -n '__fish_seen_subcommand_from new' -l title -r -d 'Title for the doc'
+complete -c apl -n '__fish_seen_subcommand_from new' -l tag   -r -d 'Tag to add'
+complete -c apl -n '__fish_seen_subcommand_from new' -l json     -d 'Output in JSON format'
+complete -c apl -n '__fish_seen_subcommand_from new; and test (count (commandline -opc)) -eq 2' \\
+  -a '(apl __complete types 2>/dev/null)'
+
+# types
+complete -c apl -n '__fish_seen_subcommand_from types' -l json -d 'Output in JSON format'
 
 # init
 complete -c apl -n '__fish_seen_subcommand_from init' -l branch        -d 'Branch name'
@@ -205,6 +269,8 @@ complete -c apl -n '__fish_seen_subcommand_from init' -l no-auto-commit -d 'Remo
 
 # add / commit
 complete -c apl -n '__fish_seen_subcommand_from add commit' -s m -r -d 'Commit message'
+complete -c apl -n '__fish_seen_subcommand_from add' -l type -r -d 'Store under this doc type' \\
+  -a '(apl __complete types 2>/dev/null)'
 
 # completion
 complete -c apl -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish' -d 'Shell'

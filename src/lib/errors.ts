@@ -37,3 +37,10 @@ export class StorePathOccupiedError extends AgentPlanError {
     this.name = "StorePathOccupiedError";
   }
 }
+
+export class FileExistsError extends AgentPlanError {
+  constructor(path: string) {
+    super(`${path} already exists. Edit it directly, or choose another name.`);
+    this.name = "FileExistsError";
+  }
+}

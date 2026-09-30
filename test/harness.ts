@@ -222,3 +222,10 @@ export async function createSecondaryCheckout(repo: Repo): Promise<Repo> {
     },
   };
 }
+
+/** Commits a team config.json, such as custom doc types, at the root of the docs branch. */
+export async function writeStoreConfig(repo: Repo, config: unknown): Promise<void> {
+  await Bun.write(join(repo.storeDir, "config.json"), JSON.stringify(config));
+  await git(repo.storeDir, ["add", "config.json"]);
+  await git(repo.storeDir, ["commit", "-m", "Configure doc types"]);
+}

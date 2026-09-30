@@ -94,6 +94,7 @@ describe("apl show", () => {
 
     expect(JSON.parse(result.stdout)).toEqual({
       path: "cli.md",
+      type: null,
       content: CLI_PLAN,
       meta: {
         title: "CLI Tool",
@@ -209,7 +210,7 @@ describe("apl ls", () => {
     const result = await apl(repo.dir, ["ls"]);
 
     const lines = result.stdout.trimEnd().split("\n");
-    expect(lines[0]).toMatch(/^FILE\s+TITLE\s+STATUS\s+TAGS\s*$/);
+    expect(lines[0]).toMatch(/^FILE\s+TYPE\s+TITLE\s+STATUS\s+TAGS\s*$/);
     expect(lines.slice(1).map((line) => line.split(/\s{2,}/).filter(Boolean))).toEqual([
       ["archive/old.md", "Old Plan", "archived", "cli"],
       ["bug.md", "Bug Fix", "draft", "bug"],

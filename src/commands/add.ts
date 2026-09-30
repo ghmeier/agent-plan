@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
+import { findType, readDocTypes } from "../lib/doc-types";
 import { FileNotFoundError, NotInitializedError } from "../lib/errors";
 import { stampTimestamps } from "../lib/frontmatter";
 import { branchExists, execGit, runGit } from "../lib/git";
@@ -12,6 +13,8 @@ import { assertNoOperationInProgress, ensureStore } from "../lib/worktree";
 export interface AddOptions {
   message?: string;
   cwd?: string;
+  /** Stores each file under this type's directory, in front of its usual path. */
+  type?: string;
 }
 
 /**
@@ -28,6 +31,9 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
   }
 
   const storeDir = await ensureStore(repoRoot, config);
+  const typePrefix = options.type
+    ? `${findType(await readDocTypes(storeDir), options.type).name}/`
+    : "";
 
   await assertNoOperationInProgress(storeDir);
 
@@ -41,7 +47,7 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
       throw new FileNotFoundError(file);
     }
 
-    const planPath = await resolvePlanPath(repoRoot, absolutePath);
+    const planPath = typePrefix + (await resolvePlanPath(repoRoot, absolutePath));
     const destPath = path.join(storeDir, planPath);
     const content = stampTimestamps(await diskFile.text());
 
@@ -82,7 +88,8 @@ export function registerAdd(program: Command): void {
     .argument("<file>", "file to add")
     .argument("[files...]", "additional files to add")
     .option("-m, --message <msg>", "custom commit message")
-    .action(async (file: string, files: string[], options: { message?: string }) => {
-      await addPlans([file, ...files], { message: options.message });
+    .option("--type <type>", "store the files under this doc type's directory")
+    .action(async (file: string, files: string[], options: { message?: string; type?: string }) => {
+      await addPlans([file, ...files], options);
     });
 }

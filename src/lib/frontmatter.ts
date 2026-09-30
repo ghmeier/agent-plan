@@ -1,12 +1,9 @@
 import { parse as parseYaml } from "yaml";
-import { warn } from "./output";
-
-export const VALID_STATUSES = ["draft", "active", "completed", "archived"] as const;
-export type PlanStatus = (typeof VALID_STATUSES)[number];
 
 export interface PlanMeta {
   title?: string;
-  status?: PlanStatus;
+  /** Any string as written. Which statuses are valid depends on the doc's type. */
+  status?: string;
   tags?: string[];
   created?: string;
   updated?: string;
@@ -51,13 +48,7 @@ export function parseFrontmatter(raw: string): ParsedPlan {
 
   if (typeof parsed.title === "string") meta.title = parsed.title;
 
-  if (typeof parsed.status === "string") {
-    if ((VALID_STATUSES as readonly string[]).includes(parsed.status)) {
-      meta.status = parsed.status as PlanStatus;
-    } else {
-      warn(`Unknown status value "${parsed.status}" — ignoring`);
-    }
-  }
+  if (typeof parsed.status === "string") meta.status = parsed.status;
 
   if (Array.isArray(parsed.tags)) {
     meta.tags = parsed.tags.filter((t): t is string => typeof t === "string");
@@ -75,30 +66,41 @@ export function today(): string {
 }
 
 /**
- * Sets `updated` to today, and `created` too if it's missing, in a file that
- * already has frontmatter. Files without frontmatter are returned as-is.
+ * Sets top-level frontmatter keys to already-serialized YAML values, in a
+ * file that already has frontmatter. Keys in `fields` are replaced or
+ * appended; keys in `missingFields` are appended only when absent. Files
+ * without frontmatter are returned as-is.
  *
  * Only those lines are touched, so other keys, comments, and formatting stay
  * exactly as the author wrote them.
  */
-export function stampTimestamps(raw: string): string {
+export function setFrontmatterFields(
+  raw: string,
+  fields: Record<string, string>,
+  missingFields: Record<string, string> = {},
+): string {
   const match = FENCE_RE.exec(raw);
   if (!match || !parseFrontmatter(raw).hasFrontmatter) return raw;
 
   const yamlStart = raw.indexOf("\n") + 1;
   const yamlBlock = match[1] ?? "";
-  const date = today();
-
   const lines = yamlBlock.length > 0 ? yamlBlock.split("\n") : [];
-  const hasKey = (key: string) => lines.some((line) => line.startsWith(`${key}:`));
+  const indexOfKey = (key: string) => lines.findIndex((line) => line.startsWith(`${key}:`));
 
-  if (!hasKey("created")) lines.push(`created: ${date}`);
-  if (hasKey("updated")) {
-    const index = lines.findIndex((line) => line.startsWith("updated:"));
-    lines[index] = `updated: ${date}`;
-  } else {
-    lines.push(`updated: ${date}`);
+  for (const [key, value] of Object.entries(missingFields)) {
+    if (indexOfKey(key) === -1) lines.push(`${key}: ${value}`);
+  }
+  for (const [key, value] of Object.entries(fields)) {
+    const index = indexOfKey(key);
+    if (index === -1) lines.push(`${key}: ${value}`);
+    else lines[index] = `${key}: ${value}`;
   }
 
   return raw.slice(0, yamlStart) + lines.join("\n") + raw.slice(yamlStart + yamlBlock.length);
+}
+
+/** Sets `updated` to today, and `created` too if it's missing. See `setFrontmatterFields`. */
+export function stampTimestamps(raw: string): string {
+  const date = today();
+  return setFrontmatterFields(raw, { updated: date }, { created: date });
 }

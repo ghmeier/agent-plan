@@ -2,10 +2,18 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
-import { parseFrontmatter, VALID_STATUSES } from "../lib/frontmatter";
+import {
+  BUILTIN_TYPES,
+  DEFAULT_STATUSES,
+  type DocType,
+  parseStoreConfig,
+  readDocTypes,
+  STORE_CONFIG_FILE,
+} from "../lib/doc-types";
+import { parseFrontmatter } from "../lib/frontmatter";
 import { runGit } from "../lib/git";
 import { findRepoRoot, getGitCommonDir, getStoreDir } from "../lib/paths";
-import { listMarkdownFiles } from "../lib/plan-files";
+import { isDocPath, listMarkdownFiles } from "../lib/plan-files";
 
 async function safeRepoRoot(cwd?: string): Promise<string | null> {
   try {
@@ -61,10 +69,7 @@ async function completeFiles(prefix: string, cwd?: string): Promise<void> {
       config.branch,
     ]);
     if (!ok) return;
-    files = stdout
-      .split("\n")
-      .filter((f) => f.endsWith(".md") && f.length > 0)
-      .sort();
+    files = stdout.split("\n").filter(isDocPath).sort();
   }
 
   for (const f of files) {
@@ -92,7 +97,7 @@ async function readTagsFromBranch(repoRoot: string, branch: string): Promise<Set
   const { stdout, ok } = await gitSpawn(repoRoot, ["ls-tree", "-r", "--name-only", branch]);
   if (!ok) return tags;
 
-  const files = stdout.split("\n").filter((f) => f.endsWith(".md") && f.length > 0);
+  const files = stdout.split("\n").filter(isDocPath);
   for (const f of files) {
     try {
       const { stdout: content, ok: showOk } = await gitSpawn(repoRoot, ["show", `${branch}:${f}`]);
@@ -121,8 +126,34 @@ async function completeTags(cwd?: string): Promise<void> {
   for (const tag of [...tags].sort()) console.log(tag);
 }
 
-async function completeStatuses(): Promise<void> {
-  for (const s of VALID_STATUSES) console.log(s);
+/** Doc types from the store, or from the docs branch when no store exists yet. */
+async function loadTypes(cwd?: string): Promise<DocType[]> {
+  const repoRoot = await safeRepoRoot(cwd);
+  if (!repoRoot) return BUILTIN_TYPES;
+
+  const storeDir = getStoreDir(await getGitCommonDir(repoRoot));
+  if (await storeReady(storeDir)) return readDocTypes(storeDir);
+
+  const config = await safeConfig(repoRoot);
+  if (!config) return BUILTIN_TYPES;
+  const { stdout, ok } = await gitSpawn(repoRoot, [
+    "show",
+    `${config.branch}:${STORE_CONFIG_FILE}`,
+  ]);
+  return ok ? parseStoreConfig(stdout, STORE_CONFIG_FILE) : BUILTIN_TYPES;
+}
+
+async function completeTypes(cwd?: string): Promise<void> {
+  for (const type of await loadTypes(cwd)) console.log(type.name);
+}
+
+/** Statuses for one type, or for all types plus untyped docs when no type is given. */
+async function completeStatuses(typeName?: string, cwd?: string): Promise<void> {
+  const types = await loadTypes(cwd);
+  const statuses = typeName
+    ? (types.find((t) => t.name === typeName)?.statuses ?? [])
+    : new Set([...DEFAULT_STATUSES, ...types.flatMap((t) => t.statuses)]);
+  for (const status of statuses) console.log(status);
 }
 
 async function completeVersions(file?: string, cwd?: string): Promise<void> {
@@ -155,7 +186,10 @@ export async function runComplete(
         await completeTags(opts.cwd);
         break;
       case "statuses":
-        await completeStatuses();
+        await completeStatuses(arg, opts.cwd);
+        break;
+      case "types":
+        await completeTypes(opts.cwd);
         break;
       case "versions":
         await completeVersions(arg, opts.cwd);

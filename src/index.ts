@@ -9,8 +9,10 @@ import { registerDiff } from "./commands/diff";
 import { registerInit } from "./commands/init";
 import { registerLog } from "./commands/log";
 import { registerLs } from "./commands/ls";
+import { registerNew } from "./commands/new";
 import { registerShow } from "./commands/show";
 import { registerSync } from "./commands/sync";
+import { registerTypes } from "./commands/types";
 import { AgentPlanError } from "./lib/errors";
 import { error } from "./lib/output";
 
@@ -29,6 +31,7 @@ program.hook("preAction", (thisCommand) => {
 });
 
 registerInit(program);
+registerNew(program);
 registerAdd(program);
 registerCommit(program);
 registerSync(program);
@@ -36,6 +39,7 @@ registerLog(program);
 registerShow(program);
 registerLs(program);
 registerDiff(program);
+registerTypes(program);
 registerCompletion(program);
 registerComplete(program);
 

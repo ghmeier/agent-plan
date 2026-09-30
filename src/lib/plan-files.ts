@@ -1,6 +1,11 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
+/** True for a path that `ls` and completion treat as a doc: markdown outside dot-directories. */
+export function isDocPath(relPath: string): boolean {
+  return relPath.endsWith(".md") && !relPath.split("/").some((part) => part.startsWith("."));
+}
+
 /** Recursively lists .md files under dir, returning repo-relative posix paths. */
 export async function listMarkdownFiles(dir: string, base = dir): Promise<string[]> {
   const results: string[] = [];
@@ -13,8 +18,8 @@ export async function listMarkdownFiles(dir: string, base = dir): Promise<string
   }
 
   for (const entry of entries) {
-    // Skip git internals.
-    if (entry.name === ".git") continue;
+    // Dot entries are git internals and apl's own files, such as `.templates/`.
+    if (entry.name.startsWith(".")) continue;
 
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {

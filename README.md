@@ -11,12 +11,15 @@ bun install && bun link
 # Initialize in your repo
 apl init
 
-# Add a plan file
-apl add plan.md
+# Start a doc from a template; prints the path to edit
+apl new plan auth-rewrite
+
+# Or store an existing file
+apl add notes.md
 
 # View docs
 apl ls
-apl show plan.md
+apl show plan/auth-rewrite.md
 
 # Sync with teammates
 apl sync
@@ -48,12 +51,22 @@ apl init
 apl init --branch docs --auto-commit
 ```
 
-### `apl add <file> [files...] [-m <message>]`
+### `apl new <type> <name> [--title <title>] [--tag <tag>]... [--json]`
 
-Copies one or more files into `.apl/` at their repo-relative path, stamps frontmatter timestamps, and commits. A file already inside `.apl/` is committed in place. Files outside the repo are rejected.
+Creates `.apl/<type>/<name>.md` from the type's template and prints its absolute path, so an agent can capture it and write to it. `<name>` may include directories, such as `billing/stripe-webhooks`. The doc starts at the type's default status. `new` doesn't commit; `commit`, `sync`, or the auto-commit hook record the doc once it has content. It fails if the file already exists.
+
+```bash
+apl new research billing/stripe-webhooks --title "Stripe webhook retries" --tag billing
+apl new handoff auth-session-3 --json
+```
+
+### `apl add <file> [files...] [-m <message>] [--type <type>]`
+
+Copies one or more files into `.apl/` at their repo-relative path, stamps frontmatter timestamps, and commits. With `--type`, the path goes under that type's directory. A file already inside `.apl/` is committed in place. Files outside the repo are rejected.
 
 ```bash
 apl add research.md plan.md -m "Add auth research and plan"
+apl add --type research docs/notes.md    # stored at research/docs/notes.md
 ```
 
 ### `apl commit [-m <message>]`
@@ -75,9 +88,9 @@ apl show plan.md --raw
 apl show plan.md --at HEAD~2
 ```
 
-### `apl ls [path] [--json] [--short] [--status <status>] [--tag <tag>]`
+### `apl ls [path] [--json] [--short] [--type <type>] [--status <status>] [--tag <tag>]`
 
-Lists markdown files in `.apl/`, including uncommitted ones, optionally under a subdirectory. The default output is a table showing filename, title, status, and tags. Use `--short` for filename-only output. Use `--status` and `--tag` to filter results (filters combine with AND).
+Lists markdown files in `.apl/`, including uncommitted ones, optionally under a subdirectory. The default output is a table showing filename, type, title, status, and tags. Use `--short` for filename-only output. Use `--type`, `--status`, and `--tag` to filter results (filters combine with AND).
 
 ```bash
 apl ls
@@ -86,7 +99,12 @@ apl ls --short
 apl ls --status active
 apl ls --tag cli
 apl ls --status active --tag cli
+apl ls --type handoff --status open
 ```
+
+### `apl types [--json]`
+
+Lists the doc types with their statuses, default status, and whether each template is built in or custom.
 
 ### `apl log [file] [-n <limit>] [--json]`
 
@@ -116,9 +134,37 @@ Commits any pending changes in `.apl/`, rebases them onto the remote branch, the
 apl sync
 ```
 
+## Document Types
+
+A doc's type is its top-level directory: `.apl/research/billing/stripe.md` is a `research` doc. Docs outside a type directory, like `.apl/notes.md` or `.apl/archive/old.md`, have no type and work as before.
+
+With no configuration there are three types:
+
+| Type | Statuses (first is the default) |
+| --- | --- |
+| `plan` | `draft`, `active`, `completed`, `archived` |
+| `research` | `draft`, `final`, `archived` |
+| `handoff` | `open`, `picked-up`, `closed` |
+
+To define your own, commit a `config.json` at the root of the docs branch. When it has a `types` key, that list replaces the built-ins, and because it lives on the branch every teammate gets the same set:
+
+```json
+{
+  "types": {
+    "plan": { "description": "Implementation plans" },
+    "handoff": { "statuses": ["open", "picked-up", "closed"] },
+    "adr": { "description": "Decision records", "statuses": ["proposed", "accepted", "superseded"] }
+  }
+}
+```
+
+`statuses` defaults to `draft`, `active`, `completed`, `archived`, and `defaultStatus` defaults to the first status. Type names are lowercase letters, digits, and dashes.
+
+Templates for `apl new` come from `.apl/.templates/<type>.md` when that file exists, and otherwise from a built-in one. These placeholders are filled in: `{{title}}`, `{{status}}`, `{{type}}`, `{{name}}`, `{{date}}`, and `{{branch}}` (the current code branch). Files under dot-directories such as `.templates/` never appear in `ls` or completion.
+
 ## Frontmatter Metadata
 
-Plan files can include optional YAML frontmatter for richer display and filtering:
+Docs can include optional YAML frontmatter for richer display and filtering:
 
 ```markdown
 ---
@@ -135,7 +181,7 @@ updated: 2026-09-15
 Supported fields:
 
 - **title**: Short display name shown in `apl ls` output
-- **status**: One of `draft`, `active`, `completed`, `archived`
+- **status**: One of the doc type's statuses (see Document Types). A status that isn't valid for the type is ignored with a warning, and the file is left unchanged.
 - **tags**: Array of free-form strings for categorization
 - **created**: ISO date, auto-set on first `apl add`
 - **updated**: ISO date, auto-set on every `apl add` and `apl commit`
@@ -144,7 +190,7 @@ Other keys are kept as written. Stamping changes only the `created` and `updated
 
 ## Agent Integration
 
-- **Normal file I/O**: agents read and write plan files in `.apl/` directly, without shelling out to the CLI for every edit.
+- **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit.
 - **Structured output**: every read command (`show`, `ls`, `log`, `diff`) supports `--json` for scripting and parsing.
 - **Automatic sync**: the auto-commit hook (`apl init --auto-commit`) commits `.apl/` changes automatically after every git commit.
 
@@ -152,9 +198,9 @@ Example agent workflow:
 
 ```bash
 apl init --auto-commit
-# agent writes .apl/plan.md directly with normal file tools
-apl sync                    # push to remote so teammates see it
-apl show plan.md --json     # read back structured plan state later
+f=$(apl new plan auth-rewrite)   # agent writes to "$f" with normal file tools
+apl sync                         # push to remote so teammates see it
+apl show plan/auth-rewrite.md --json   # read back structured state later
 ```
 
 ## Shell Completion
