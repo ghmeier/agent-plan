@@ -14,6 +14,8 @@ bun src/index.ts <cmd>   # run the CLI from source
 
 Run all three (test, typecheck, lint) before calling work done.
 
+Releases are published to npm as `@ghmeier/agent-plan` by `.github/workflows/publish.yml` when a `v*` tag is pushed; see README "Releasing". CI runs on Linux, where git versions can differ from local macOS, so be careful with git behavior that varies across versions.
+
 ## Layout
 
 - `src/index.ts`: commander setup. Each command lives in `src/commands/<name>.ts` and exports `register<Name>(program)`.

@@ -1,5 +1,5 @@
 {
-  "name": "agent-plan",
+  "name": "@ghmeier/agent-plan",
   "version": "0.1.0",
   "description": "Version-controlled plan storage for agent-driven coding workflows, without cluttering your main repo.",
   "license": "MIT",
@@ -9,16 +9,20 @@
   },
   "module": "src/index.ts",
   "type": "module",
-  "private": true,
   "bin": {
     "agent-plan": "src/index.ts",
     "apl": "src/index.ts"
   },
   "files": [
     "src",
-    "package.json",
     "README.md"
   ],
+  "engines": {
+    "bun": ">=1.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "bun test",
     "start": "bun run src/index.ts",
@@ -31,9 +35,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
+    "@types/bun": "latest",
     "typescript": "^7.0.2"
   },
   "dependencies": {

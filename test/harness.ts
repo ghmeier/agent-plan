@@ -160,8 +160,13 @@ export async function createInitializedRepo(): Promise<Repo> {
   const repo = await copyTemplate(initializedRepoTemplate);
   // The copied store worktree and `.apl` link still point at the template by
   // absolute path. Left alone, writes through `.apl` would land in the template.
+  // Both halves of the worktree link are rewritten by hand: `git worktree
+  // repair` follows the store's stale `.git` file back to the template and,
+  // on some git versions, re-points the template's store at this copy.
   const store = join(repo.dir, ".git", "agent-plan", "worktree");
-  await git(repo.dir, ["worktree", "repair", store]);
+  const adminDir = join(repo.dir, ".git", "worktrees", "worktree");
+  await Bun.write(join(store, ".git"), `gitdir: ${adminDir}\n`);
+  await Bun.write(join(adminDir, "gitdir"), `${join(store, ".git")}\n`);
   await rm(repo.storeDir);
   await symlink(store, repo.storeDir);
   return repo;

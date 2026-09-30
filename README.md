@@ -5,8 +5,8 @@ Version-controlled plan storage for agent-driven coding workflows, without clutt
 ## Quick Start
 
 ```bash
-# Install from a clone of this repo (see Install / Build below)
-bun install && bun link
+# Install (requires Bun); run it again to update
+bun i -g @ghmeier/agent-plan@latest
 
 # Initialize in your repo
 apl init
@@ -260,10 +260,17 @@ bun run src/index.ts --help
 
 ## Install / Build
 
-For local development, link the CLI globally with Bun:
+Install the latest release globally with Bun, which puts `apl` on `PATH` (in `~/.bun/bin`). Run the same command to update:
 
 ```bash
-bun link
+bun i -g @ghmeier/agent-plan@latest
+apl --version
+```
+
+For local development, link the CLI globally from a clone instead:
+
+```bash
+bun install && bun link
 apl --help
 ```
 
@@ -279,3 +286,12 @@ To cross-compile binaries for macOS (arm64, x64) and Linux (x64) in one step:
 ```bash
 bun run build:all      # writes dist/apl-darwin-arm64, dist/apl-darwin-x64, dist/apl-linux-x64
 ```
+
+## Releasing
+
+```bash
+bun pm version patch   # or minor / major: bumps package.json, commits, and tags vX.Y.Z
+git push --follow-tags
+```
+
+Pushing the tag runs `.github/workflows/publish.yml`, which checks the tag matches `package.json`, then typechecks, lints, tests, and publishes to npm. The workflow needs an npm automation token in the repo's `NPM_TOKEN` secret.
