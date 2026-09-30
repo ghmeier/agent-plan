@@ -20,7 +20,7 @@ _apl_completions() {
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
   fi
 
-  local subcommands="init new add commit sync log show ls diff types completion"
+  local subcommands="init new add commit sync pull status log show ls diff types completion"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=($(compgen -W "$subcommands" -- "$cur"))
@@ -76,8 +76,14 @@ _apl_completions() {
           ;;
       esac
       ;;
-    types)
+    types|status)
       COMPREPLY=($(compgen -W "--json" -- "$cur"))
+      ;;
+    sync)
+      COMPREPLY=($(compgen -W "--if-changed" -- "$cur"))
+      ;;
+    pull)
+      COMPREPLY=($(compgen -W "--quiet" -- "$cur"))
       ;;
     init)
       COMPREPLY=($(compgen -W "--branch --auto-commit --no-auto-commit" -- "$cur"))
@@ -128,6 +134,8 @@ _apl() {
         'add:Add files to doc storage'
         'commit:Commit pending changes'
         'sync:Sync with remote'
+        'pull:Pull doc changes without pushing'
+        'status:Show uncommitted docs and remote status'
         'log:Show commit history'
         'show:Show a doc'
         'ls:List docs'
@@ -173,8 +181,14 @@ _apl() {
             ':type:($(apl __complete types 2>/dev/null))' \\
             ':name:()'
           ;;
-        types)
+        types|status)
           _arguments '--json[Output in JSON format]'
+          ;;
+        sync)
+          _arguments '--if-changed[Only sync when there are local changes]'
+          ;;
+        pull)
+          _arguments '--quiet[Print nothing unless something goes wrong]'
           ;;
         init)
           _arguments \\
@@ -217,6 +231,8 @@ complete -c apl -n '__fish_use_subcommand' -a new        -d 'Create a doc from a
 complete -c apl -n '__fish_use_subcommand' -a add        -d 'Add files to doc storage'
 complete -c apl -n '__fish_use_subcommand' -a commit     -d 'Commit pending changes'
 complete -c apl -n '__fish_use_subcommand' -a sync       -d 'Sync with remote'
+complete -c apl -n '__fish_use_subcommand' -a pull       -d 'Pull doc changes without pushing'
+complete -c apl -n '__fish_use_subcommand' -a status     -d 'Show uncommitted docs and remote status'
 complete -c apl -n '__fish_use_subcommand' -a log        -d 'Show commit history'
 complete -c apl -n '__fish_use_subcommand' -a show       -d 'Show a doc'
 complete -c apl -n '__fish_use_subcommand' -a ls         -d 'List docs'
@@ -259,8 +275,12 @@ complete -c apl -n '__fish_seen_subcommand_from new' -l json     -d 'Output in J
 complete -c apl -n '__fish_seen_subcommand_from new; and test (count (commandline -opc)) -eq 2' \\
   -a '(apl __complete types 2>/dev/null)'
 
-# types
-complete -c apl -n '__fish_seen_subcommand_from types' -l json -d 'Output in JSON format'
+# types / status
+complete -c apl -n '__fish_seen_subcommand_from types status' -l json -d 'Output in JSON format'
+
+# sync / pull
+complete -c apl -n '__fish_seen_subcommand_from sync' -l if-changed -d 'Only sync when there are local changes'
+complete -c apl -n '__fish_seen_subcommand_from pull' -s q -l quiet -d 'Print nothing unless something goes wrong'
 
 # init
 complete -c apl -n '__fish_seen_subcommand_from init' -l branch        -d 'Branch name'

@@ -71,7 +71,7 @@ apl add --type research docs/notes.md    # stored at research/docs/notes.md
 
 ### `apl commit [-m <message>]`
 
-Stages and commits all pending changes in `.apl/`. Stamps `updated` timestamps into any modified markdown files that have frontmatter.
+Stages and commits all pending changes in `.apl/`. Stamps `updated` timestamps into any modified markdown files that have frontmatter. The default message names the changed files.
 
 ```bash
 apl commit
@@ -80,7 +80,7 @@ apl commit -m "Update plan after review"
 
 ### `apl show <path> [--at <ref>] [--json] [--raw]`
 
-Prints the contents of a doc. Reads from `.apl/<path>` directly, so uncommitted edits are visible. Use `--at` to read a historical revision from git history.
+Prints the contents of a doc. Reads from `.apl/<path>` directly, so uncommitted edits are visible. The `.md` extension is optional. Use `--at` to read a historical revision from git history.
 
 ```bash
 apl show plan.md
@@ -90,7 +90,7 @@ apl show plan.md --at HEAD~2
 
 ### `apl ls [path] [--json] [--short] [--type <type>] [--status <status>] [--tag <tag>]`
 
-Lists markdown files in `.apl/`, including uncommitted ones, optionally under a subdirectory. The default output is a table showing filename, type, title, status, and tags. Use `--short` for filename-only output. Use `--type`, `--status`, and `--tag` to filter results (filters combine with AND).
+Lists markdown files in `.apl/`, including uncommitted ones, optionally under a subdirectory, most recently updated first. The default output is a table showing filename, type, title, status, last update, and tags. Use `--short` for filename-only output. Use `--type`, `--status`, and `--tag` to filter results (filters combine with AND).
 
 ```bash
 apl ls
@@ -124,15 +124,25 @@ apl diff
 apl diff plan.md
 ```
 
-### `apl sync`
+### `apl sync [--if-changed]`
 
 Commits any pending changes in `.apl/`, rebases them onto the remote branch, then pushes. If a teammate edited the same lines, sync aborts the rebase, names the conflicting files, and exits with an error without pushing; your local commits are left as they were. Skips gracefully if no remote is configured.
+
+`--if-changed` does nothing, not even a fetch, unless there are local changes to publish, which suits hooks that run often.
 
 `commit`, `add`, and `sync` refuse to run while a rebase or merge inside `.apl/` is unfinished, so conflict markers are never committed as plan content.
 
 ```bash
 apl sync
 ```
+
+### `apl pull [--quiet]`
+
+Brings in teammates' doc changes without pushing. Pending edits are committed locally first, then rebased onto the remote branch, the same way `sync` does it.
+
+### `apl status [--json]`
+
+Shows where the store is, how many commits this checkout is ahead of or behind the remote as of the last fetch (`apl pull` refreshes it), uncommitted files, and any unfinished rebase or merge. It also creates the `.apl` link in a checkout that doesn't have one yet.
 
 ## Document Types
 
@@ -190,18 +200,35 @@ Other keys are kept as written. Stamping changes only the `created` and `updated
 
 ## Agent Integration
 
-- **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit.
-- **Structured output**: every read command (`show`, `ls`, `log`, `diff`) supports `--json` for scripting and parsing.
-- **Automatic sync**: the auto-commit hook (`apl init --auto-commit`) commits `.apl/` changes automatically after every git commit.
+- **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit. `apl new` prints the path to write to.
+- **Structured output**: `show`, `ls`, `log`, `diff`, `status`, `types`, and `new` support `--json`, and output is uncolored when it isn't going to a terminal.
+- **Finding docs**: `.apl` is git-ignored and a symlink, so ripgrep-based search tools skip it unless given the path explicitly (for example Grep with `path: ".apl"`).
 
-Example agent workflow:
+### Claude Code setup
 
-```bash
-apl init --auto-commit
-f=$(apl new plan auth-rewrite)   # agent writes to "$f" with normal file tools
-apl sync                         # push to remote so teammates see it
-apl show plan/auth-rewrite.md --json   # read back structured state later
+Copy `integrations/claude-code/skills/apl/` into the repo's `.claude/skills/`. The skill teaches agents to look for earlier docs, create them with `apl new`, publish with `apl sync`, and write handoffs. Then add hooks to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "apl pull --quiet; apl ls --type handoff --status open --short"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "apl sync --if-changed >/dev/null" }] }
+    ]
+  }
+}
 ```
+
+`SessionStart` brings in teammates' changes, creates the `.apl` link in a fresh checkout, and shows the agent open handoffs. `Stop` publishes the agent's doc edits after each turn. `--if-changed` makes turns without doc edits skip the network, and a conflict is reported to the user. With these hooks, the git post-commit hook (`apl init --auto-commit`) isn't needed. `apl` must be on `PATH` for both.
 
 ## Shell Completion
 

@@ -199,8 +199,8 @@ describe("types in add, ls, and show", () => {
     const { files } = JSON.parse((await apl(repo.dir, ["ls", "--json"])).stdout);
 
     expect(files.map((f: { file: string; type: string | null }) => [f.file, f.type])).toEqual([
-      ["archive/old.md", null],
       ["plan/b.md", "plan"],
+      ["archive/old.md", null],
     ]);
   });
 

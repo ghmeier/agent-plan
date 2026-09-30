@@ -151,6 +151,25 @@ describe("apl show", () => {
     expect(result.stderr).toContain("File not found: plan.md at HEAD~1");
   });
 
+  test("show finds a doc when the .md extension is left off", async () => {
+    await using repo = await createInitializedRepo();
+    await addPlan(repo, "auth/plan.md", "# Plan\n");
+
+    const result = await apl(repo.dir, ["show", "auth/plan", "--raw"]);
+
+    expect(result.stdout).toBe("# Plan\n");
+  });
+
+  test("show with a directory suggests listing it", async () => {
+    await using repo = await createInitializedRepo();
+    await addPlan(repo, "auth/plan.md", "# Plan\n");
+
+    const result = await apl(repo.dir, ["show", "auth"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("apl ls auth");
+  });
+
   test("show fails for a file that does not exist", async () => {
     await using repo = await createInitializedRepo();
 
@@ -210,12 +229,22 @@ describe("apl ls", () => {
     const result = await apl(repo.dir, ["ls"]);
 
     const lines = result.stdout.trimEnd().split("\n");
-    expect(lines[0]).toMatch(/^FILE\s+TYPE\s+TITLE\s+STATUS\s+TAGS\s*$/);
+    const today = new Date().toISOString().slice(0, 10);
+    expect(lines[0]).toMatch(/^FILE\s+TYPE\s+TITLE\s+STATUS\s+UPDATED\s+TAGS\s*$/);
     expect(lines.slice(1).map((line) => line.split(/\s{2,}/).filter(Boolean))).toEqual([
-      ["archive/old.md", "Old Plan", "archived", "cli"],
-      ["bug.md", "Bug Fix", "draft", "bug"],
-      ["cli.md", "CLI Tool", "active", "cli, ux"],
+      ["archive/old.md", "Old Plan", "archived", today, "cli"],
+      ["bug.md", "Bug Fix", "draft", today, "bug"],
+      ["cli.md", "CLI Tool", "active", today, "cli, ux"],
     ]);
+  });
+
+  test("ls lists the most recently updated docs first and undated docs last", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.storeDir, "older.md"), "---\nupdated: 2026-01-01\n---\n");
+    await Bun.write(join(repo.storeDir, "newer.md"), "---\nupdated: 2026-03-01\n---\n");
+    await Bun.write(join(repo.storeDir, "undated.md"), "# No frontmatter\n");
+
+    expect(await lsShort(repo)).toEqual(["newer.md", "older.md", "undated.md"]);
   });
 
   test("ls --json returns each file with its metadata", async () => {

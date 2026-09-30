@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
@@ -26,8 +27,17 @@ async function readFromHistory(storeDir: string, ref: string, planPath: string):
 
 async function readFromWorktree(storeDir: string, planPath: string): Promise<string> {
   const file = Bun.file(join(storeDir, planPath));
-  if (!(await file.exists())) throw new FileNotFoundError(planPath);
-  return file.text();
+  if (await file.exists()) return file.text();
+
+  const withExtension = Bun.file(join(storeDir, `${planPath}.md`));
+  if (!planPath.endsWith(".md") && (await withExtension.exists())) return withExtension.text();
+
+  if ((await stat(join(storeDir, planPath)).catch(() => null))?.isDirectory()) {
+    throw new AgentPlanError(
+      `${planPath} is a directory. List its docs with 'apl ls ${planPath}'.`,
+    );
+  }
+  throw new FileNotFoundError(planPath);
 }
 
 export async function showPlan(

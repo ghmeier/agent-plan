@@ -22,6 +22,17 @@ export interface PlanEntry {
   meta: PlanMeta;
 }
 
+function lastUpdated(entry: PlanEntry): string | undefined {
+  return entry.meta.updated ?? entry.meta.created;
+}
+
+/** Newest first, so the doc someone is most likely looking for is at the top. Undated docs go last. */
+function byMostRecentlyUpdated(a: PlanEntry, b: PlanEntry): number {
+  const [dateA, dateB] = [lastUpdated(a) ?? "", lastUpdated(b) ?? ""];
+  if (dateA !== dateB) return dateA < dateB ? 1 : -1;
+  return a.file < b.file ? -1 : a.file > b.file ? 1 : 0;
+}
+
 export async function listPlans(
   path?: string,
   cwd?: string,
@@ -45,6 +56,8 @@ export async function listPlans(
       return { file, type: type?.name ?? null, meta };
     }),
   );
+
+  entries.sort(byMostRecentlyUpdated);
 
   // Filters AND-combine: an entry must match every one that's given.
   const filtered = entries.filter((entry) => {
@@ -83,13 +96,14 @@ export async function listPlans(
 }
 
 function printTable(entries: PlanEntry[]): void {
-  const headers = ["FILE", "TYPE", "TITLE", "STATUS", "TAGS"];
+  const headers = ["FILE", "TYPE", "TITLE", "STATUS", "UPDATED", "TAGS"];
 
   const rows = entries.map((e) => [
     e.file,
     e.type ?? "",
     e.meta.title ?? "",
     e.meta.status ?? "",
+    lastUpdated(e) ?? "",
     e.meta.tags?.join(", ") ?? "",
   ]);
 

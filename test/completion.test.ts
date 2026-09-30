@@ -225,6 +225,8 @@ describe.skipIf(!HAS_BASH)("bash completion", () => {
         "add",
         "commit",
         "sync",
+        "pull",
+        "status",
         "log",
         "show",
         "ls",

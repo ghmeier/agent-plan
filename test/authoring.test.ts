@@ -182,7 +182,7 @@ describe("editing plans in .apl/ and committing", () => {
     expect(await planLogMessages(repo, ["-n", "1"])).toEqual(["Add a step"]);
   });
 
-  test("commit records new and deleted files with a default message", async () => {
+  test("commit records new and deleted files with a message naming them", async () => {
     await using repo = await createInitializedRepo();
     await addPlan(repo, "old.md", "# Old\n");
     await rm(join(repo.storeDir, "old.md"));
@@ -192,7 +192,20 @@ describe("editing plans in .apl/ and committing", () => {
 
     expect((await apl(repo.dir, ["ls", "--short"])).stdout).toBe("new.md\n");
     expect((await apl(repo.dir, ["diff"])).stdout).toBe("No changes\n");
-    expect(await planLogMessages(repo, ["-n", "1"])).toEqual(["Update docs"]);
+    expect(await planLogMessages(repo, ["-n", "1"])).toEqual(["Update new.md, old.md"]);
+  });
+
+  test("commit's default message names the first three files and counts the rest", async () => {
+    await using repo = await createInitializedRepo();
+    for (const name of ["a", "b", "c", "d", "e"]) {
+      await Bun.write(join(repo.storeDir, `${name}.md`), `# ${name}\n`);
+    }
+
+    await apl(repo.dir, ["commit"]);
+
+    expect(await planLogMessages(repo, ["-n", "1"])).toEqual([
+      "Update a.md, b.md, c.md and 2 more",
+    ]);
   });
 
   test("commit handles file names with spaces", async () => {

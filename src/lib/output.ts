@@ -1,5 +1,6 @@
+/** Colors only for a terminal, so output that agents and scripts capture stays plain text. */
 function shouldColor(): boolean {
-  return process.env.NO_COLOR === undefined;
+  return process.env.NO_COLOR === undefined && process.stdout.isTTY === true;
 }
 
 function color(code: number, text: string): string {

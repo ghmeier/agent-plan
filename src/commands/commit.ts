@@ -47,14 +47,26 @@ async function stageAndStamp(storeDir: string): Promise<boolean> {
   return diffExitCode !== 0;
 }
 
+const MAX_PATHS_IN_MESSAGE = 3;
+
+/** Names the staged files, so `apl log` shows what each commit touched. */
+async function defaultMessage(storeDir: string): Promise<string> {
+  const { stdout } = await runGit(["diff", "--cached", "--name-only", "-z"], storeDir);
+  const paths = stdout.split("\0").filter(Boolean);
+  const shown = paths.slice(0, MAX_PATHS_IN_MESSAGE).join(", ");
+  const hidden = paths.length - MAX_PATHS_IN_MESSAGE;
+  return hidden > 0 ? `Update ${shown} and ${hidden} more` : `Update ${shown}`;
+}
+
 export interface CommitOptions {
   message?: string;
   cwd?: string;
-  /** Skip the "Nothing to commit" notice, for callers that commit as one step of a larger command. */
+  /** Print nothing, for callers that commit as one step of a larger command. */
   quiet?: boolean;
 }
 
-export async function commitPlans(options: CommitOptions = {}): Promise<void> {
+/** Commits pending changes in the store. Returns whether there was anything to commit. */
+export async function commitPlans(options: CommitOptions = {}): Promise<boolean> {
   const repoRoot = await findRepoRoot(options.cwd);
   const config = await readConfig(repoRoot);
 
@@ -65,13 +77,14 @@ export async function commitPlans(options: CommitOptions = {}): Promise<void> {
 
   if (!hasChanges) {
     if (!options.quiet) info("Nothing to commit");
-    return;
+    return false;
   }
 
-  const message = options.message ?? "Update docs";
+  const message = options.message ?? (await defaultMessage(storeDir));
   await execGit(["commit", "-m", message], storeDir);
 
-  success("Committed doc changes");
+  if (!options.quiet) success("Committed doc changes");
+  return true;
 }
 
 export function registerCommit(program: Command): void {

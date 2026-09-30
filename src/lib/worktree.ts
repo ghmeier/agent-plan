@@ -197,19 +197,27 @@ const IN_PROGRESS_OPERATIONS = [
   { marker: "CHERRY_PICK_HEAD", name: "cherry-pick", command: "cherry-pick" },
 ] as const;
 
+/** The git operation the store is in the middle of, if any. */
+export async function operationInProgress(
+  storeDir: string,
+): Promise<(typeof IN_PROGRESS_OPERATIONS)[number] | null> {
+  for (const operation of IN_PROGRESS_OPERATIONS) {
+    if (await pathExists(await gitPath(storeDir, operation.marker))) return operation;
+  }
+  return null;
+}
+
 /**
  * Throws when the store is in the middle of a rebase, merge, or cherry-pick.
  * Committing then would record conflict markers as document content and
  * leave the operation half-finished.
  */
 export async function assertNoOperationInProgress(storeDir: string): Promise<void> {
-  for (const operation of IN_PROGRESS_OPERATIONS) {
-    if (await pathExists(await gitPath(storeDir, operation.marker))) {
-      throw new AgentPlanError(
-        `A ${operation.name} is in progress in ${storeDir}. Resolve the conflicts, stage the files, ` +
-          `and run 'git -C ${storeDir} ${operation.command} --continue', or cancel with ` +
-          `'git -C ${storeDir} ${operation.command} --abort'. Then run the command again.`,
-      );
-    }
-  }
+  const operation = await operationInProgress(storeDir);
+  if (!operation) return;
+  throw new AgentPlanError(
+    `A ${operation.name} is in progress in ${storeDir}. Resolve the conflicts, stage the files, ` +
+      `and run 'git -C ${storeDir} ${operation.command} --continue', or cancel with ` +
+      `'git -C ${storeDir} ${operation.command} --abort'. Then run the command again.`,
+  );
 }

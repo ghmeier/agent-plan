@@ -23,6 +23,8 @@ Run all three (test, typecheck, lint) before calling work done.
 - `src/lib/doc-types.ts`: doc types. A doc's type is its top-level directory in the store; types come from a `config.json` committed on the docs branch, or the built-ins (`plan`, `research`, `handoff`). Also templates for `apl new`. Status validity depends on the type, so it's checked at display time (`withValidStatus`), never while parsing.
 - `src/lib/frontmatter.ts`: YAML frontmatter parsing, and `setFrontmatterFields`, which edits only the lines for the keys it sets so everything else in a user's frontmatter survives. Never re-serialize a whole frontmatter block.
 - `src/lib/hooks.ts`: the optional post-commit auto-commit hook. It appends a marked section to an existing hook rather than overwriting it.
+- `src/lib/remote.ts`: fetch, rebase, and ahead/behind helpers shared by `sync`, `pull`, and `status`.
+- `integrations/claude-code/`: the skill teams copy into their repo to teach agents the tool. Update it when a command agents use changes.
 - `src/commands/complete.ts` is the hidden backend for shell completion; `completion.ts` emits the bash/zsh/fish scripts that call it.
 
 ## Conventions
