@@ -1,11 +1,16 @@
-import { chmod, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { gitPath, INTERNAL_ENV_VAR } from "./git";
 
 const MARKER = "agent-plan";
 
 const HOOK_SCRIPT = `#!/bin/sh
 # agent-plan: auto-commit plan changes
 # Installed by 'apl init --auto-commit'. Remove with 'apl init --no-auto-commit'.
+
+# apl's own commits inside .plans/ also run this hook. Skip those so the hook
+# doesn't start another apl commit from inside one.
+[ -n "$${INTERNAL_ENV_VAR}" ] && exit 0
 
 message="Auto-commit: plan changes after $(git log -1 --format='%h %s')"
 
@@ -15,38 +20,17 @@ message="Auto-commit: plan changes after $(git log -1 --format='%h %s')"
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
 
 if command -v apl >/dev/null 2>&1; then
-  apl commit -m "$message" 2>/dev/null || true
-elif command -v bun >/dev/null 2>&1; then
-  bun run agent-plan commit -m "$message" 2>/dev/null || true
+  apl commit -m "$message" >/dev/null || echo "apl: auto-commit of plan changes failed" >&2
 fi
 `;
 
 /**
- * Resolves the post-commit hook path via `git rev-parse --git-dir` rather
- * than assuming `<repoRoot>/.git`, since .git is a file (not a directory)
- * pointing elsewhere when repoRoot is a worktree.
+ * Asks git where hooks live rather than assuming `<repoRoot>/.git/hooks`: a
+ * secondary checkout shares the main checkout's hooks, and `core.hooksPath`
+ * (set by tools like husky and lefthook) moves them elsewhere.
  */
 async function postCommitHookPath(repoRoot: string): Promise<string> {
-  const proc = Bun.spawn(["git", "rev-parse", "--git-dir"], {
-    cwd: repoRoot,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-
-  if (exitCode !== 0) {
-    throw new Error(`git rev-parse --git-dir failed (exit ${exitCode}): ${stderr.trim()}`);
-  }
-
-  const gitDir = stdout.trim();
-  const absoluteGitDir = gitDir.startsWith("/") ? gitDir : join(repoRoot, gitDir);
-
-  return join(absoluteGitDir, "hooks", "post-commit");
+  return join(await gitPath(repoRoot, "hooks"), "post-commit");
 }
 
 async function readHookIfExists(hookPath: string): Promise<string | undefined> {
@@ -125,19 +109,4 @@ function removeSection(contents: string, marker: string): string {
   }
 
   return `${contents.slice(0, start)}\n`;
-}
-
-export async function hasAutoCommitHook(repoRoot: string): Promise<boolean> {
-  const hookPath = await postCommitHookPath(repoRoot);
-  const existing = await readHookIfExists(hookPath);
-  return existing?.includes(MARKER) ?? false;
-}
-
-export async function isExecutable(hookPath: string): Promise<boolean> {
-  try {
-    const info = await stat(hookPath);
-    return (info.mode & 0o111) !== 0;
-  } catch {
-    return false;
-  }
 }

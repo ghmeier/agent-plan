@@ -1,30 +1,35 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
+import { execGit, runGit } from "../lib/git";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
 import { ensurePlansWorktree } from "../lib/worktree";
 
-async function gitDiff(plansDir: string, planPath?: string): Promise<string> {
-  const args = ["diff", "HEAD"];
-  if (planPath) args.push("--", planPath);
-
-  const proc = Bun.spawn(["git", ...args], {
-    cwd: plansDir,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-
-  // git diff exits 0 (no diff) or 1 (diff found); anything else is a real error.
+/** git diff exits 0 (no diff) or 1 (diff found); anything else is a real error. */
+async function runDiff(args: string[], plansDir: string): Promise<string> {
+  const { exitCode, stdout, stderr } = await runGit(["diff", ...args], plansDir);
   if (exitCode > 1) {
-    throw new Error(`git diff failed (exit ${exitCode}): ${stderr.trim()}`);
+    throw new Error(`git diff ${args.join(" ")} failed (exit ${exitCode}): ${stderr.trim()}`);
   }
-
   return stdout;
+}
+
+/** Diffs tracked files against HEAD, plus new files that `git diff` alone would leave out. */
+async function gitDiff(plansDir: string, planPath?: string): Promise<string> {
+  const pathspec = planPath ? ["--", planPath] : [];
+  const tracked = await runDiff(["HEAD", ...pathspec], plansDir);
+
+  const untrackedList = await execGit(
+    ["ls-files", "--others", "--exclude-standard", "-z", ...pathspec],
+    plansDir,
+  );
+  const untracked = await Promise.all(
+    untrackedList
+      .split("\0")
+      .filter(Boolean)
+      .map((file) => runDiff(["--no-index", "--", "/dev/null", file], plansDir)),
+  );
+
+  return tracked + untracked.join("");
 }
 
 export async function diffPlan(

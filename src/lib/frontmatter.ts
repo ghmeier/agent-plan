@@ -1,4 +1,4 @@
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml } from "yaml";
 import { warn } from "./output";
 
 export const VALID_STATUSES = ["draft", "active", "completed", "archived"] as const;
@@ -19,6 +19,10 @@ export interface ParsedPlan {
   hasFrontmatter: boolean;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 const FENCE_RE = /^---\r?\n([\s\S]*?)\n---\r?\n?([\s\S]*)$/;
 
 /** Parse YAML frontmatter from markdown content. Files without a frontmatter
@@ -32,11 +36,14 @@ export function parseFrontmatter(raw: string): ParsedPlan {
   const yamlBlock = match[1] ?? "";
   const body = match[2] ?? "";
 
-  let parsed: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    parsed = (parseYaml(yamlBlock) as Record<string, unknown>) ?? {};
+    parsed = parseYaml(yamlBlock) ?? {};
   } catch {
     // Malformed YAML — treat the file as if there's no frontmatter.
+    return { meta: {}, content: raw, hasFrontmatter: false };
+  }
+  if (!isRecord(parsed)) {
     return { meta: {}, content: raw, hasFrontmatter: false };
   }
 
@@ -62,36 +69,36 @@ export function parseFrontmatter(raw: string): ParsedPlan {
   return { meta, content: body, hasFrontmatter: true };
 }
 
-/** Serialize PlanMeta back to a YAML frontmatter block prepended to body.
- * Fields with undefined values are omitted from the output. */
-export function serializeFrontmatter(meta: PlanMeta, body: string): string {
-  const obj: Record<string, unknown> = {};
-  if (meta.title !== undefined) obj.title = meta.title;
-  if (meta.status !== undefined) obj.status = meta.status;
-  if (meta.tags !== undefined) obj.tags = meta.tags;
-  if (meta.created !== undefined) obj.created = meta.created;
-  if (meta.updated !== undefined) obj.updated = meta.updated;
-
-  const yaml = stringifyYaml(obj).trimEnd();
-  return `---\n${yaml}\n---\n${body}`;
-}
-
 /** Return today's date as an ISO date string (YYYY-MM-DD). */
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 /**
- * Inject or update `updated` (and `created` if absent) into a file that
+ * Sets `updated` to today, and `created` too if it's missing, in a file that
  * already has frontmatter. Files without frontmatter are returned as-is.
+ *
+ * Only those lines are touched, so other keys, comments, and formatting stay
+ * exactly as the author wrote them.
  */
 export function stampTimestamps(raw: string): string {
-  const parsed = parseFrontmatter(raw);
-  if (!parsed.hasFrontmatter) return raw;
+  const match = FENCE_RE.exec(raw);
+  if (!match || !parseFrontmatter(raw).hasFrontmatter) return raw;
 
+  const yamlStart = raw.indexOf("\n") + 1;
+  const yamlBlock = match[1] ?? "";
   const date = today();
-  parsed.meta.updated = date;
-  if (!parsed.meta.created) parsed.meta.created = date;
 
-  return serializeFrontmatter(parsed.meta, parsed.content);
+  const lines = yamlBlock.length > 0 ? yamlBlock.split("\n") : [];
+  const hasKey = (key: string) => lines.some((line) => line.startsWith(`${key}:`));
+
+  if (!hasKey("created")) lines.push(`created: ${date}`);
+  if (hasKey("updated")) {
+    const index = lines.findIndex((line) => line.startsWith("updated:"));
+    lines[index] = `updated: ${date}`;
+  } else {
+    lines.push(`updated: ${date}`);
+  }
+
+  return raw.slice(0, yamlStart) + lines.join("\n") + raw.slice(yamlStart + yamlBlock.length);
 }

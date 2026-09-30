@@ -147,7 +147,7 @@ describe("apl show", () => {
     const result = await apl(repo.dir, ["show", "plan.md", "--at", "HEAD~1"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("File not found: plan.md");
+    expect(result.stderr).toContain("File not found: plan.md at HEAD~1");
   });
 
   test("show fails for a file that does not exist", async () => {
@@ -176,9 +176,29 @@ describe("apl show", () => {
     const result = await apl(repo.dir, ["show", "plan.md"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('Unknown status value "bogus"');
+    expect(result.stderr).toContain('Unknown status value "bogus"');
     expect(result.stdout).toContain("Title:   Plan");
     expect(result.stdout).not.toContain("Status:");
+  });
+
+  test("show --json stays parseable when a file has an unknown status", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.plansDir, "plan.md"), "---\ntitle: Plan\nstatus: bogus\n---\n");
+
+    const result = await apl(repo.dir, ["show", "plan.md", "--json"]);
+
+    expect(JSON.parse(result.stdout).meta).toEqual({ title: "Plan" });
+    expect(result.stderr).toContain('Unknown status value "bogus"');
+  });
+
+  test("show --at with an unknown revision names the revision", async () => {
+    await using repo = await createInitializedRepo();
+    await addPlan(repo, "plan.md", "# Plan\n");
+
+    const result = await apl(repo.dir, ["show", "plan.md", "--at", "no-such-ref"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown revision: no-such-ref");
   });
 });
 
@@ -303,6 +323,16 @@ describe("apl log", () => {
 });
 
 describe("apl diff", () => {
+  test("diff includes a new file that has never been committed", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.plansDir, "new plan.md"), "# New\n");
+
+    const result = await apl(repo.dir, ["diff"]);
+
+    expect(result.stdout).toContain("new plan.md");
+    expect(result.stdout).toContain("+# New");
+  });
+
   test("diff with a file shows only that file's changes", async () => {
     await using repo = await createInitializedRepo();
     await addPlan(repo, "plan.md", "# Plan\n");

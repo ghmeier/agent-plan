@@ -2,11 +2,10 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
-import { parseFrontmatter } from "../lib/frontmatter";
+import { parseFrontmatter, VALID_STATUSES } from "../lib/frontmatter";
+import { runGit } from "../lib/git";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
 import { listMarkdownFiles } from "../lib/plan-files";
-
-const STATUSES = ["draft", "active", "completed", "archived"];
 
 async function safeRepoRoot(cwd?: string): Promise<string | null> {
   try {
@@ -38,16 +37,7 @@ async function gitSpawn(
   repoRoot: string,
   args: string[],
 ): Promise<{ stdout: string; ok: boolean }> {
-  const proc = Bun.spawn(["git", ...args], {
-    cwd: repoRoot,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, , exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
+  const { stdout, exitCode } = await runGit(args, repoRoot);
   return { stdout, ok: exitCode === 0 };
 }
 
@@ -132,7 +122,7 @@ async function completeTags(cwd?: string): Promise<void> {
 }
 
 async function completeStatuses(): Promise<void> {
-  for (const s of STATUSES) console.log(s);
+  for (const s of VALID_STATUSES) console.log(s);
 }
 
 async function completeVersions(file?: string, cwd?: string): Promise<void> {

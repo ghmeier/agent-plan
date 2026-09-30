@@ -1,25 +1,32 @@
 import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
-import { FileNotFoundError } from "../lib/errors";
+import { AgentPlanError, FileNotFoundError } from "../lib/errors";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
+import { runGit } from "../lib/git";
 import { colors } from "../lib/output";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
 import { ensurePlansWorktree } from "../lib/worktree";
 
 async function readFromHistory(plansDir: string, ref: string, planPath: string): Promise<string> {
-  const proc = Bun.spawn(["git", "show", `${ref}:${planPath}`], {
-    cwd: plansDir,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, , exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  if (exitCode !== 0) throw new Error(`No such file at ${ref}`);
-  return stdout;
+  if (
+    (await runGit(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], plansDir)).exitCode !== 0
+  ) {
+    throw new AgentPlanError(`Unknown revision: ${ref}`);
+  }
+
+  const { exitCode, stdout, stderr } = await runGit(["show", `${ref}:${planPath}`], plansDir);
+  if (exitCode === 0) return stdout;
+  if (stderr.includes("does not exist") || stderr.includes("exists on disk, but not in")) {
+    throw new FileNotFoundError(`${planPath} at ${ref}`);
+  }
+  throw new Error(`git show ${ref}:${planPath} failed: ${stderr.trim()}`);
+}
+
+async function readFromWorktree(plansDir: string, planPath: string): Promise<string> {
+  const file = Bun.file(join(plansDir, planPath));
+  if (!(await file.exists())) throw new FileNotFoundError(planPath);
+  return file.text();
 }
 
 export async function showPlan(
@@ -34,18 +41,9 @@ export async function showPlan(
 
   const plansDir = getPlansDir(repoRoot);
 
-  let content: string;
-  try {
-    if (options.at) {
-      content = await readFromHistory(plansDir, options.at, planPath);
-    } else {
-      const file = Bun.file(join(plansDir, planPath));
-      if (!(await file.exists())) throw new Error("not found");
-      content = await file.text();
-    }
-  } catch {
-    throw new FileNotFoundError(planPath);
-  }
+  const content = options.at
+    ? await readFromHistory(plansDir, options.at, planPath)
+    : await readFromWorktree(plansDir, planPath);
 
   if (options.json) {
     const { meta, content: body } = parseFrontmatter(content);

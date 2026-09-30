@@ -24,7 +24,7 @@ export function error(msg: string): void {
 }
 
 export function warn(msg: string): void {
-  console.log(`${colors.yellow("⚠")} ${msg}`);
+  console.error(`${colors.yellow("⚠")} ${msg}`);
 }
 
 export function info(msg: string): void {

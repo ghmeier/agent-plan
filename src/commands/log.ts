@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
+import { execGit } from "../lib/git";
 import { info } from "../lib/output";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
 import { ensurePlansWorktree } from "../lib/worktree";
@@ -26,17 +27,7 @@ async function getLogFromWorktree(
   if (limit !== undefined) args.push("-n", String(limit));
   if (file) args.push("--", file);
 
-  const proc = Bun.spawn(["git", ...args], {
-    cwd: plansDir,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const [stdout] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
+  const stdout = await execGit(args, plansDir);
 
   return stdout
     .split(LOG_RECORD_SEP)

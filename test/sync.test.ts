@@ -140,7 +140,7 @@ describe("collaborating through a shared remote", () => {
     expect((await apl(publisher.dir, ["show", "reply.md", "--raw"])).stdout).toBe("# Reply\n");
   });
 
-  test("sync refuses to push when local and remote plans have diverged", async () => {
+  test("sync rebases onto a teammate's changes to other files and pushes both", async () => {
     await using remote = await createRemote();
     await using publisher = await createPublishingRepo(remote);
     await using teammate = await createTeammateRepo(remote);
@@ -150,8 +150,28 @@ describe("collaborating through a shared remote", () => {
 
     const result = await apl(teammate.dir, ["sync"]);
 
+    expect(result.exitCode).toBe(0);
+    expect(await git(remote.dir, ["ls-tree", "--name-only", "plans"])).toBe(
+      "first.md\nsecond.md\nshared.md",
+    );
+  });
+
+  test("sync with a conflicting edit names the file and pushes nothing", async () => {
+    await using remote = await createRemote();
+    await using publisher = await createPublishingRepo(remote);
+    await using teammate = await createTeammateRepo(remote);
+    await Bun.write(join(publisher.plansDir, "shared.md"), "# Publisher's version\n");
+    await apl(publisher.dir, ["sync"]);
+    await Bun.write(join(teammate.plansDir, "shared.md"), "# Teammate's version\n");
+
+    const result = await apl(teammate.dir, ["sync"]);
+
     expect(result.exitCode).toBe(1);
-    expect(result.stdout).toContain("diverged");
-    expect(await git(remote.dir, ["ls-tree", "--name-only", "plans"])).toBe("first.md\nshared.md");
+    expect(result.stderr).toContain("conflict with origin/plans in: shared.md");
+    expect(await git(remote.dir, ["show", "plans:shared.md"])).toBe("# Publisher's version");
+    expect((await apl(teammate.dir, ["show", "shared.md", "--raw"])).stdout).toBe(
+      "# Teammate's version\n",
+    );
+    expect((await apl(teammate.dir, ["commit"])).exitCode).toBe(0);
   });
 });

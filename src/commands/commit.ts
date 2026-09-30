@@ -2,28 +2,10 @@ import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { stampTimestamps } from "../lib/frontmatter";
+import { execGit, runGit } from "../lib/git";
 import { info, success } from "../lib/output";
 import { findRepoRoot, getPlansDir } from "../lib/paths";
-import { ensurePlansWorktree } from "../lib/worktree";
-
-async function runGit(
-  args: string[],
-  cwd: string,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(["git", ...args], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-
-  return { exitCode, stdout, stderr };
-}
+import { assertNoOperationInProgress, ensurePlansWorktree } from "../lib/worktree";
 
 /**
  * Stages all changes with `git add -A`, stamps updated timestamps into
@@ -31,7 +13,7 @@ async function runGit(
  * Returns true when there are staged changes ready to commit.
  */
 async function stageAndStamp(plansDir: string): Promise<boolean> {
-  await runGit(["add", "-A"], plansDir);
+  await execGit(["add", "-A"], plansDir);
 
   // List added/modified markdown files in the index using NUL-delimited output
   // so paths with spaces or special characters are handled correctly.
@@ -40,10 +22,7 @@ async function stageAndStamp(plansDir: string): Promise<boolean> {
     plansDir,
   );
 
-  const stagedPaths = nameList
-    .split("\0")
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0 && p.endsWith(".md"));
+  const stagedPaths = nameList.split("\0").filter((p) => p.length > 0 && p.endsWith(".md"));
 
   const toRestage: string[] = [];
 
@@ -61,32 +40,37 @@ async function stageAndStamp(plansDir: string): Promise<boolean> {
   }
 
   if (toRestage.length > 0) {
-    await runGit(["add", "--", ...toRestage], plansDir);
+    await execGit(["add", "--", ...toRestage], plansDir);
   }
 
   const { exitCode: diffExitCode } = await runGit(["diff", "--cached", "--quiet"], plansDir);
   return diffExitCode !== 0;
 }
 
-export async function commitPlans(options: { message?: string; cwd?: string } = {}): Promise<void> {
+export interface CommitOptions {
+  message?: string;
+  cwd?: string;
+  /** Skip the "Nothing to commit" notice, for callers that commit as one step of a larger command. */
+  quiet?: boolean;
+}
+
+export async function commitPlans(options: CommitOptions = {}): Promise<void> {
   const repoRoot = await findRepoRoot(options.cwd);
   const config = await readConfig(repoRoot);
 
   await ensurePlansWorktree(repoRoot, config);
 
   const plansDir = getPlansDir(repoRoot);
+  await assertNoOperationInProgress(plansDir);
   const hasChanges = await stageAndStamp(plansDir);
 
   if (!hasChanges) {
-    info("Nothing to commit");
+    if (!options.quiet) info("Nothing to commit");
     return;
   }
 
   const message = options.message ?? "Update plans";
-  const { exitCode, stderr } = await runGit(["commit", "-m", message], plansDir);
-  if (exitCode !== 0) {
-    throw new Error(`git commit failed: ${stderr.trim()}`);
-  }
+  await execGit(["commit", "-m", message], plansDir);
 
   success("Committed plan changes");
 }

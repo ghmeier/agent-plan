@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chmod, mkdir } from "node:fs/promises";
+import { chmod, lstat, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
   addPlan,
@@ -98,6 +98,39 @@ describe("auto-commit hook", () => {
     await commitCodeChange(repo, "Implement feature");
 
     expect(await planLogMessages(repo)).toEqual(["Initialize plans"]);
+  });
+
+  test("--auto-commit from a secondary checkout also auto-commits from the main checkout", async () => {
+    await using main = await createInitializedRepo();
+    await using secondary = await createSecondaryCheckout(main);
+    await apl(secondary.dir, ["init", "--auto-commit"]);
+    await Bun.write(join(main.plansDir, "plan.md"), "# Plan\n");
+
+    await commitCodeChange(main, "Implement feature");
+
+    expect(await planLogMessages(main)).toHaveLength(2);
+  });
+
+  test("--auto-commit installs into core.hooksPath when the repo sets one", async () => {
+    await using repo = await createInitializedRepo();
+    await git(repo.dir, ["config", "core.hooksPath", ".githooks"]);
+    await apl(repo.dir, ["init", "--auto-commit"]);
+    await Bun.write(join(repo.plansDir, "plan.md"), "# Plan\n");
+
+    await commitCodeChange(repo, "Implement feature");
+
+    expect(await planLogMessages(repo)).toHaveLength(2);
+  });
+
+  test("the auto-commit hook doesn't run again for apl's own commits", async () => {
+    await using repo = await createInitializedRepo();
+    await apl(repo.dir, ["init", "--auto-commit"]);
+    await Bun.write(join(repo.plansDir, "plan.md"), "# Plan\n");
+
+    await commitCodeChange(repo, "Implement feature");
+
+    expect(await planLogMessages(repo)).toHaveLength(2);
+    expect(await lstat(join(repo.plansDir, ".plans")).catch(() => null)).toBeNull();
   });
 
   test("an existing post-commit hook keeps running through install and removal", async () => {

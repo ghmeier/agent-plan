@@ -1,8 +1,8 @@
 import { appendFile, lstat, readFile, realpath, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 import type { PlanConfig } from "../types";
-import { NotInitializedError, PlansPathOccupiedError } from "./errors";
-import { Git } from "./git";
+import { AgentPlanError, NotInitializedError, PlansPathOccupiedError } from "./errors";
+import { branchExists, execGit, gitPath, runGit } from "./git";
 import { getGitCommonDir, getMainWorktreeRoot, getPlansDir } from "./paths";
 
 async function realpathSafe(p: string): Promise<string> {
@@ -23,13 +23,8 @@ async function pathExists(p: string): Promise<boolean> {
 }
 
 async function isWorktreeDir(repoRoot: string, plansDir: string): Promise<boolean> {
-  const git = new Git(repoRoot);
-  let output: string;
-  try {
-    output = await git.exec(["worktree", "list", "--porcelain"]);
-  } catch {
-    return false;
-  }
+  const { exitCode, stdout: output } = await runGit(["worktree", "list", "--porcelain"], repoRoot);
+  if (exitCode !== 0) return false;
 
   const resolvedPlansDir = await realpathSafe(plansDir);
   const worktreePaths = await Promise.all(
@@ -63,8 +58,6 @@ async function ensureInfoExclude(repoRoot: string): Promise<void> {
 }
 
 async function addWorktreeDir(repoRoot: string, plansDir: string, branch: string): Promise<void> {
-  const git = new Git(repoRoot);
-
   if (await isWorktreeDir(repoRoot, plansDir)) {
     return;
   }
@@ -73,7 +66,7 @@ async function addWorktreeDir(repoRoot: string, plansDir: string, branch: string
     throw new PlansPathOccupiedError(plansDir);
   }
 
-  await git.exec(["worktree", "add", plansDir, branch]);
+  await execGit(["worktree", "add", plansDir, branch], repoRoot);
 }
 
 /** Ensures `.plans/` is ready for use: a real worktree in the main checkout
@@ -87,8 +80,6 @@ export async function ensurePlansWorktree(
   isInit = false,
 ): Promise<void> {
   const plansDir = getPlansDir(repoRoot);
-  const git = new Git(repoRoot, config.branch);
-
   const mainRoot = await getMainWorktreeRoot(repoRoot);
   // Resolve symlinks before comparing — on macOS, /var/folders is a symlink to
   // /private/var/folders, so a naive path.resolve comparison would disagree.
@@ -108,10 +99,10 @@ export async function ensurePlansWorktree(
 
     if (!isInit) {
       // Non-init callers expect the branch to already exist.
-      if (!(await git.branchExists())) {
+      if (!(await branchExists(repoRoot, config.branch))) {
         try {
-          await git.exec(["fetch", config.remote, config.branch]);
-          await git.exec(["branch", config.branch, `${config.remote}/${config.branch}`]);
+          await execGit(["fetch", config.remote, config.branch], repoRoot);
+          await execGit(["branch", config.branch, `${config.remote}/${config.branch}`], repoRoot);
         } catch {
           throw new NotInitializedError();
         }
@@ -143,5 +134,29 @@ export async function ensurePlansWorktree(
     }
 
     await symlink(mainPlansDir, plansDir);
+  }
+}
+
+const IN_PROGRESS_OPERATIONS = [
+  { marker: "rebase-merge", name: "rebase", command: "rebase" },
+  { marker: "rebase-apply", name: "rebase", command: "rebase" },
+  { marker: "MERGE_HEAD", name: "merge", command: "merge" },
+  { marker: "CHERRY_PICK_HEAD", name: "cherry-pick", command: "cherry-pick" },
+] as const;
+
+/**
+ * Throws when `.plans/` is in the middle of a rebase, merge, or cherry-pick.
+ * Committing then would record conflict markers as plan content and leave
+ * the operation half-finished.
+ */
+export async function assertNoOperationInProgress(plansDir: string): Promise<void> {
+  for (const operation of IN_PROGRESS_OPERATIONS) {
+    if (await pathExists(await gitPath(plansDir, operation.marker))) {
+      throw new AgentPlanError(
+        `A ${operation.name} is in progress in ${plansDir}. Resolve the conflicts, stage the files, ` +
+          `and run 'git -C ${plansDir} ${operation.command} --continue', or cancel with ` +
+          `'git -C ${plansDir} ${operation.command} --abort'. Then run the command again.`,
+      );
+    }
   }
 }

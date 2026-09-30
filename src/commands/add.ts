@@ -4,24 +4,14 @@ import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { FileNotFoundError, NotInitializedError } from "../lib/errors";
 import { stampTimestamps } from "../lib/frontmatter";
-import { Git } from "../lib/git";
-import { success } from "../lib/output";
+import { branchExists, execGit, runGit } from "../lib/git";
+import { info, success } from "../lib/output";
 import { findRepoRoot, getPlansDir, resolvePlanPath } from "../lib/paths";
-import { ensurePlansWorktree } from "../lib/worktree";
+import { assertNoOperationInProgress, ensurePlansWorktree } from "../lib/worktree";
 
 export interface AddOptions {
   message?: string;
   cwd?: string;
-}
-
-async function runGit(args: string[], cwd: string): Promise<{ exitCode: number; stderr: string }> {
-  const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-  const [, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  return { exitCode, stderr };
 }
 
 /**
@@ -32,50 +22,57 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
   const cwd = options.cwd ?? process.cwd();
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
-  const git = new Git(repoRoot, config.branch);
 
-  if (!(await git.branchExists())) {
+  if (!(await branchExists(repoRoot, config.branch))) {
     throw new NotInitializedError();
   }
 
   await ensurePlansWorktree(repoRoot, config);
 
   const plansDir = getPlansDir(repoRoot);
-  const resolved: { planPath: string; destPath: string }[] = [];
+  await assertNoOperationInProgress(plansDir);
+
+  const planPaths: string[] = [];
 
   for (const file of files) {
-    const absolutePath = path.isAbsolute(file) ? file : path.resolve(cwd, file);
+    const absolutePath = path.resolve(cwd, file);
     const diskFile = Bun.file(absolutePath);
 
     if (!(await diskFile.exists())) {
       throw new FileNotFoundError(file);
     }
 
-    const rawContent = await diskFile.text();
-    const content = stampTimestamps(rawContent);
-    const planPath = resolvePlanPath(repoRoot, absolutePath);
+    const planPath = await resolvePlanPath(repoRoot, absolutePath);
     const destPath = path.join(plansDir, planPath);
+    const content = stampTimestamps(await diskFile.text());
 
     await mkdir(path.dirname(destPath), { recursive: true });
     await Bun.write(destPath, content);
-    resolved.push({ planPath, destPath });
+    planPaths.push(planPath);
   }
 
-  // Stage only the files we just wrote, then commit.
-  const relPaths = resolved.map((f) => f.planPath);
-  const { exitCode: addCode, stderr: addErr } = await runGit(["add", "--", ...relPaths], plansDir);
-  if (addCode !== 0) throw new Error(`git add failed: ${addErr.trim()}`);
+  await execGit(["add", "--", ...planPaths], plansDir);
 
-  const message = options.message ?? `Add ${relPaths.join(", ")}`;
-  const { exitCode: commitCode, stderr: commitErr } = await runGit(
-    ["commit", "-m", message],
+  const { exitCode: unchanged } = await runGit(
+    ["diff", "--cached", "--quiet", "--", ...planPaths],
     plansDir,
   );
-  if (commitCode !== 0) throw new Error(`git commit failed: ${commitErr.trim()}`);
+  if (unchanged === 0) {
+    info("Already up to date; nothing to commit");
+    return;
+  }
 
-  success(`Added ${resolved.length} file(s) to plans`);
-  for (const f of resolved) {
-    console.log(`  ${f.planPath}`);
+  const message = options.message ?? `Add ${planPaths.join(", ")}`;
+  const commit = await runGit(["commit", "-m", message, "--", ...planPaths], plansDir);
+  if (commit.exitCode !== 0) {
+    // Unstage so a later `apl commit` doesn't sweep these files in under its own message.
+    await runGit(["reset", "-q", "--", ...planPaths], plansDir);
+    throw new Error(`git commit failed: ${commit.stderr.trim()}`);
+  }
+
+  success(`Added ${planPaths.length} file(s) to plans`);
+  for (const planPath of planPaths) {
+    console.log(`  ${planPath}`);
   }
 }
 

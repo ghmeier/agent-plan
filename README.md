@@ -5,10 +5,8 @@ Version-controlled plan storage for agent-driven coding workflows, without clutt
 ## Quick Start
 
 ```bash
-# Install
-npm install -g agent-plan
-# or run directly
-npx agent-plan
+# Install from a clone of this repo (see Install / Build below)
+bun install && bun link
 
 # Initialize in your repo
 apl init
@@ -40,8 +38,10 @@ When you have multiple checkouts of the same repo (from `git worktree add` or a 
 
 Initializes plan storage in the current repo. Creates the plans branch if it doesn't exist (or builds on an existing remote branch to keep shared history), and sets up the `.plans/` worktree.
 
+Teammates don't need to run `init`: in a clone whose remote already has the plans branch, any command fetches it and sets up `.plans/` on first use.
+
 - `--branch <name>`: use a branch name other than `plans`
-- `--auto-commit`: install a git hook that commits worktree changes automatically after every commit
+- `--auto-commit`: install a post-commit hook that commits pending `.plans/` changes after every code commit. It goes wherever git reads hooks from, including `core.hooksPath`, and covers every checkout of the repo. It needs `apl` on `PATH`.
 
 ```bash
 apl init
@@ -50,7 +50,7 @@ apl init --branch plans --auto-commit
 
 ### `apl add <file> [files...] [-m <message>]`
 
-Copies one or more files into `.plans/` at their repo-relative path, stamps frontmatter timestamps, and commits.
+Copies one or more files into `.plans/` at their repo-relative path, stamps frontmatter timestamps, and commits. A file already inside `.plans/` is committed in place. Files outside the repo are rejected.
 
 ```bash
 apl add research.md plan.md -m "Add auth research and plan"
@@ -99,7 +99,7 @@ apl log plan.md -n 5
 
 ### `apl diff [file] [--json]`
 
-Shows uncommitted changes in `.plans/` against HEAD, for all files or one.
+Shows uncommitted changes in `.plans/` against HEAD, for all files or one, including new files that have never been committed.
 
 ```bash
 apl diff
@@ -108,7 +108,9 @@ apl diff plan.md
 
 ### `apl sync`
 
-Commits any pending changes in `.plans/`, fast-forward pulls from the configured remote, then pushes. If local and remote have diverged, warns and exits with an error without pushing. Skips gracefully if no remote is configured.
+Commits any pending changes in `.plans/`, rebases them onto the remote branch, then pushes. If a teammate edited the same lines, sync aborts the rebase, names the conflicting files, and exits with an error without pushing; your local commits are left as they were. Skips gracefully if no remote is configured.
+
+`commit`, `add`, and `sync` refuse to run while a rebase or merge inside `.plans/` is unfinished, so conflict markers are never committed as plan content.
 
 ```bash
 apl sync
@@ -138,7 +140,7 @@ Supported fields:
 - **created**: ISO date, auto-set on first `apl add`
 - **updated**: ISO date, auto-set on every `apl add` and `apl commit`
 
-Files without frontmatter work exactly as they do without it. Timestamps are only injected into files that already have a frontmatter block.
+Other keys are kept as written. Stamping changes only the `created` and `updated` lines, so comments, key order, and formatting are left alone. Timestamps are only injected into files that already have a frontmatter block.
 
 ## Agent Integration
 
@@ -150,7 +152,7 @@ Example agent workflow:
 
 ```bash
 apl init --auto-commit
-# agent writes /.plans/plan.md directly with normal file tools
+# agent writes .plans/plan.md directly with normal file tools
 apl sync                    # push to remote so teammates see it
 apl show plan.md --json     # read back structured plan state later
 ```
