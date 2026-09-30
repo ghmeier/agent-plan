@@ -5,17 +5,17 @@ import { AgentPlanError, FileNotFoundError } from "../lib/errors";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
 import { runGit } from "../lib/git";
 import { colors } from "../lib/output";
-import { findRepoRoot, getPlansDir } from "../lib/paths";
-import { ensurePlansWorktree } from "../lib/worktree";
+import { findRepoRoot } from "../lib/paths";
+import { ensureStore } from "../lib/worktree";
 
-async function readFromHistory(plansDir: string, ref: string, planPath: string): Promise<string> {
+async function readFromHistory(storeDir: string, ref: string, planPath: string): Promise<string> {
   if (
-    (await runGit(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], plansDir)).exitCode !== 0
+    (await runGit(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], storeDir)).exitCode !== 0
   ) {
     throw new AgentPlanError(`Unknown revision: ${ref}`);
   }
 
-  const { exitCode, stdout, stderr } = await runGit(["show", `${ref}:${planPath}`], plansDir);
+  const { exitCode, stdout, stderr } = await runGit(["show", `${ref}:${planPath}`], storeDir);
   if (exitCode === 0) return stdout;
   if (stderr.includes("does not exist") || stderr.includes("exists on disk, but not in")) {
     throw new FileNotFoundError(`${planPath} at ${ref}`);
@@ -23,8 +23,8 @@ async function readFromHistory(plansDir: string, ref: string, planPath: string):
   throw new Error(`git show ${ref}:${planPath} failed: ${stderr.trim()}`);
 }
 
-async function readFromWorktree(plansDir: string, planPath: string): Promise<string> {
-  const file = Bun.file(join(plansDir, planPath));
+async function readFromWorktree(storeDir: string, planPath: string): Promise<string> {
+  const file = Bun.file(join(storeDir, planPath));
   if (!(await file.exists())) throw new FileNotFoundError(planPath);
   return file.text();
 }
@@ -37,13 +37,11 @@ export async function showPlan(
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
 
-  await ensurePlansWorktree(repoRoot, config);
-
-  const plansDir = getPlansDir(repoRoot);
+  const storeDir = await ensureStore(repoRoot, config);
 
   const content = options.at
-    ? await readFromHistory(plansDir, options.at, planPath)
-    : await readFromWorktree(plansDir, planPath);
+    ? await readFromHistory(storeDir, options.at, planPath)
+    : await readFromWorktree(storeDir, planPath);
 
   if (options.json) {
     const { meta, content: body } = parseFrontmatter(content);
@@ -87,7 +85,7 @@ function printMetaHeader(meta: PlanMeta): void {
 export function registerShow(program: Command): void {
   program
     .command("show <path>")
-    .description("Show the contents of a plan file")
+    .description("Show the contents of a doc")
     .option("--at <ref>", "Show the file as of a commit ref")
     .option("--json", "Output in JSON format")
     .option("--raw", "Print the file as-is, without the metadata header")

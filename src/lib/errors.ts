@@ -10,7 +10,7 @@ export class AgentPlanError extends Error {
 
 export class NotInitializedError extends AgentPlanError {
   constructor() {
-    super("Plan storage is not initialized. Run 'apl init' first.");
+    super("Doc storage is not initialized. Run 'apl init' first.");
     this.name = "NotInitializedError";
   }
 }
@@ -29,11 +29,11 @@ export class FileNotFoundError extends AgentPlanError {
   }
 }
 
-export class PlansPathOccupiedError extends AgentPlanError {
+export class StorePathOccupiedError extends AgentPlanError {
   constructor(path: string) {
     super(
       `${path} already exists and is not managed by apl. Move or remove it, then run the command again.`,
     );
-    this.name = "PlansPathOccupiedError";
+    this.name = "StorePathOccupiedError";
   }
 }

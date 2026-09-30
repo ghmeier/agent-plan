@@ -4,7 +4,7 @@ import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { parseFrontmatter, VALID_STATUSES } from "../lib/frontmatter";
 import { runGit } from "../lib/git";
-import { findRepoRoot, getPlansDir } from "../lib/paths";
+import { findRepoRoot, getGitCommonDir, getStoreDir } from "../lib/paths";
 import { listMarkdownFiles } from "../lib/plan-files";
 
 async function safeRepoRoot(cwd?: string): Promise<string | null> {
@@ -23,10 +23,10 @@ async function safeConfig(repoRoot: string): Promise<{ branch: string; remote: s
   }
 }
 
-/** True when .plans/ exists and is readable as a directory without triggering worktree creation. */
-async function plansDirReady(plansDir: string): Promise<boolean> {
+/** True when the store exists and is readable, checked without triggering its creation. */
+async function storeReady(storeDir: string): Promise<boolean> {
   try {
-    await readdir(plansDir);
+    await readdir(storeDir);
     return true;
   } catch {
     return false;
@@ -48,11 +48,11 @@ async function completeFiles(prefix: string, cwd?: string): Promise<void> {
   const config = await safeConfig(repoRoot);
   if (!config) return;
 
-  const plansDir = getPlansDir(repoRoot);
+  const storeDir = getStoreDir(await getGitCommonDir(repoRoot));
   let files: string[];
 
-  if (await plansDirReady(plansDir)) {
-    files = await listMarkdownFiles(plansDir);
+  if (await storeReady(storeDir)) {
+    files = await listMarkdownFiles(storeDir);
   } else {
     const { stdout, ok } = await gitSpawn(repoRoot, [
       "ls-tree",
@@ -72,12 +72,12 @@ async function completeFiles(prefix: string, cwd?: string): Promise<void> {
   }
 }
 
-async function readTagsFromWorktree(plansDir: string): Promise<Set<string>> {
+async function readTagsFromWorktree(storeDir: string): Promise<Set<string>> {
   const tags = new Set<string>();
-  const files = await listMarkdownFiles(plansDir);
+  const files = await listMarkdownFiles(storeDir);
   for (const f of files) {
     try {
-      const content = await Bun.file(join(plansDir, f)).text();
+      const content = await Bun.file(join(storeDir, f)).text();
       const { meta } = parseFrontmatter(content);
       for (const tag of meta.tags ?? []) tags.add(tag);
     } catch {
@@ -113,9 +113,9 @@ async function completeTags(cwd?: string): Promise<void> {
   const config = await safeConfig(repoRoot);
   if (!config) return;
 
-  const plansDir = getPlansDir(repoRoot);
-  const tags = (await plansDirReady(plansDir))
-    ? await readTagsFromWorktree(plansDir)
+  const storeDir = getStoreDir(await getGitCommonDir(repoRoot));
+  const tags = (await storeReady(storeDir))
+    ? await readTagsFromWorktree(storeDir)
     : await readTagsFromBranch(repoRoot, config.branch);
 
   for (const tag of [...tags].sort()) console.log(tag);

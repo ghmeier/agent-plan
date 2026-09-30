@@ -5,8 +5,8 @@ export interface GitResult {
 }
 
 /**
- * Set on every git process apl spawns. Commits apl makes inside the plans
- * worktree run the repo's shared post-commit hook, and the auto-commit hook
+ * Set on every git process apl spawns. Commits apl makes inside the store
+ * run the repo's shared post-commit hook, and the auto-commit hook
  * checks this variable so it doesn't start another `apl commit` from inside one.
  */
 export const INTERNAL_ENV_VAR = "APL_INTERNAL";
@@ -50,7 +50,7 @@ export async function branchExists(repoRoot: string, branch: string): Promise<bo
 /** Creates an empty orphan branch using plumbing commands, without touching the working tree. */
 export async function createOrphanBranch(repoRoot: string, branch: string): Promise<void> {
   const tree = await execGit(["hash-object", "-t", "tree", "/dev/null"], repoRoot);
-  const commit = await execGit(["commit-tree", tree, "-m", "Initialize plans"], repoRoot);
+  const commit = await execGit(["commit-tree", tree, "-m", "Initialize docs"], repoRoot);
   await execGit(["update-ref", `refs/heads/${branch}`, commit], repoRoot);
 }
 

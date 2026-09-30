@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir } from "node:fs/promises";
+import { lstat, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { apl, createInitializedRepo, createRepo, createTempDir, git } from "./harness";
 
@@ -10,8 +10,8 @@ describe("apl init", () => {
     const result = await apl(repo.dir, ["init"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Initialized plan storage on branch 'plans'");
-    await Bun.write(join(repo.plansDir, "plan.md"), "# Plan\n");
+    expect(result.stdout).toContain("Initialized doc storage on branch 'apl'");
+    await Bun.write(join(repo.storeDir, "plan.md"), "# Plan\n");
     expect(await git(repo.dir, ["status", "--porcelain"])).toBe("");
     expect((await apl(repo.dir, ["ls", "--short"])).stdout).toBe("plan.md\n");
   });
@@ -24,7 +24,8 @@ describe("apl init", () => {
     const result = await apl(subdir, ["init"]);
 
     expect(result.exitCode).toBe(0);
-    expect(await Bun.file(join(repo.plansDir, ".git")).exists()).toBe(true);
+    expect((await apl(repo.dir, ["ls", "--short"])).exitCode).toBe(0);
+    expect((await lstat(repo.storeDir)).isSymbolicLink()).toBe(true);
   });
 
   test("init on an initialized repo reports it and keeps existing plans", async () => {
@@ -48,7 +49,7 @@ describe("apl init", () => {
 
     expect(result.exitCode).toBe(0);
     expect(await git(repo.dir, ["show", "notes:plan.md"])).toBe("# Plan");
-    expect(await git(repo.dir, ["branch", "--list", "plans"])).toBe("");
+    expect(await git(repo.dir, ["branch", "--list", "apl"])).toBe("");
   });
 
   test("init stores no config or other files on the plans branch", async () => {
@@ -56,18 +57,30 @@ describe("apl init", () => {
 
     await apl(repo.dir, ["init"]);
 
-    expect(await git(repo.dir, ["ls-tree", "-r", "--name-only", "plans"])).toBe("");
+    expect(await git(repo.dir, ["ls-tree", "-r", "--name-only", "apl"])).toBe("");
   });
 
-  test("init refuses to replace a .plans directory that apl does not manage", async () => {
+  test("init moves files from an existing .apl directory into doc storage", async () => {
     await using repo = await createRepo();
-    await Bun.write(join(repo.plansDir, "notes.md"), "my notes");
+    await Bun.write(join(repo.storeDir, "notes.md"), "my notes");
+
+    const result = await apl(repo.dir, ["init"]);
+
+    expect(result.exitCode).toBe(0);
+    expect((await lstat(repo.storeDir)).isSymbolicLink()).toBe(true);
+    expect((await apl(repo.dir, ["show", "notes.md", "--raw"])).stdout).toBe("my notes");
+  });
+
+  test("init explains how to free a docs branch that another worktree has checked out", async () => {
+    await using repo = await createRepo();
+    await using elsewhere = await createTempDir();
+    await git(repo.dir, ["worktree", "add", "-b", "apl", join(elsewhere.dir, "old")]);
 
     const result = await apl(repo.dir, ["init"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("already exists and is not managed by apl");
-    expect(await Bun.file(join(repo.plansDir, "notes.md")).text()).toBe("my notes");
+    expect(result.stderr).toContain("Branch 'apl' is already checked out at");
+    expect(result.stderr).toContain("git worktree remove");
   });
 
   test("init outside a git repo fails with an explanation", async () => {

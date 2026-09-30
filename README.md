@@ -14,7 +14,7 @@ apl init
 # Add a plan file
 apl add plan.md
 
-# View plans
+# View docs
 apl ls
 apl show plan.md
 
@@ -24,33 +24,33 @@ apl sync
 
 ## Why?
 
-AI coding workflows generate a steady stream of research docs, plans, and handoffs. Committing them to your main repo creates churn and review burden on files that are just markdown. Keeping them local means they can't be shared with teammates or survive a fresh clone. agent-plan solves this by storing plans on a separate git branch with its own history, synced with a single command, so there's never a question of whether or how to commit a plan file.
+AI coding workflows generate a steady stream of research docs, plans, and handoffs. Committing them to your main repo creates churn and review burden on files that are just markdown. Keeping them local means they can't be shared with teammates or survive a fresh clone. agent-plan solves this by storing them on a separate git branch with its own history, synced with a single command, so there's never a question of whether or how to commit one.
 
 ## How It Works
 
-Plans live in a `.plans/` directory that `apl init` sets up as a git worktree on an independent orphan branch (default: `plans`). Agents and editors read and write plan files with normal file I/O. `apl commit` stages and commits whatever changed in `.plans/`. Because the branch is pushed to the same remote as your code, teammates get plans automatically on fetch, with no extra remote or auth setup.
+Docs live on an independent orphan branch (default: `apl`), checked out as a git worktree inside the shared git directory at `.git/agent-plan/worktree`. Every checkout of the repo gets a `.apl` symlink to it, and it is listed in `.git/info/exclude` so the code repo never sees it. Agents and editors read and write files under `.apl/` with normal file I/O. `apl commit` stages and commits whatever changed. Because the branch is pushed to the same remote as your code, teammates get docs automatically on fetch, with no extra remote or auth setup.
 
-When you have multiple checkouts of the same repo (from `git worktree add` or a tool like `wt`), the main checkout owns the real `.plans/` worktree. Every other checkout gets `.plans` as a symlink to the main checkout's `.plans/`, so they all share the same files and commit to the same branch.
+Because the worktree belongs to no single checkout, every checkout (from `git worktree add` or a tool like `wt`) shares the same files and commits to the same branch, and removing or moving any checkout leaves the docs intact. Any apl command creates the `.apl` link in a checkout that lacks one. If an agent already wrote files into a plain `.apl/` directory there, apl moves them into the store first.
 
 ## Commands
 
 ### `apl init [--branch <name>] [--auto-commit]`
 
-Initializes plan storage in the current repo. Creates the plans branch if it doesn't exist (or builds on an existing remote branch to keep shared history), and sets up the `.plans/` worktree.
+Initializes doc storage in the current repo. Creates the docs branch if it doesn't exist (or builds on an existing remote branch to keep shared history), and sets up the `.apl/` worktree.
 
-Teammates don't need to run `init`: in a clone whose remote already has the plans branch, any command fetches it and sets up `.plans/` on first use.
+Teammates don't need to run `init`: in a clone whose remote already has the docs branch, any command fetches it and sets up `.apl/` on first use.
 
-- `--branch <name>`: use a branch name other than `plans`
-- `--auto-commit`: install a post-commit hook that commits pending `.plans/` changes after every code commit. It goes wherever git reads hooks from, including `core.hooksPath`, and covers every checkout of the repo. It needs `apl` on `PATH`.
+- `--branch <name>`: use a branch name other than `apl`
+- `--auto-commit`: install a post-commit hook that commits pending `.apl/` changes after every code commit. It goes wherever git reads hooks from, including `core.hooksPath`, and covers every checkout of the repo. It needs `apl` on `PATH`.
 
 ```bash
 apl init
-apl init --branch plans --auto-commit
+apl init --branch docs --auto-commit
 ```
 
 ### `apl add <file> [files...] [-m <message>]`
 
-Copies one or more files into `.plans/` at their repo-relative path, stamps frontmatter timestamps, and commits. A file already inside `.plans/` is committed in place. Files outside the repo are rejected.
+Copies one or more files into `.apl/` at their repo-relative path, stamps frontmatter timestamps, and commits. A file already inside `.apl/` is committed in place. Files outside the repo are rejected.
 
 ```bash
 apl add research.md plan.md -m "Add auth research and plan"
@@ -58,7 +58,7 @@ apl add research.md plan.md -m "Add auth research and plan"
 
 ### `apl commit [-m <message>]`
 
-Stages and commits all pending changes in `.plans/`. Stamps `updated` timestamps into any modified markdown files that have frontmatter.
+Stages and commits all pending changes in `.apl/`. Stamps `updated` timestamps into any modified markdown files that have frontmatter.
 
 ```bash
 apl commit
@@ -67,7 +67,7 @@ apl commit -m "Update plan after review"
 
 ### `apl show <path> [--at <ref>] [--json] [--raw]`
 
-Prints the contents of a plan file. Reads from `.plans/<path>` directly, so uncommitted edits are visible. Use `--at` to read a historical revision from git history.
+Prints the contents of a doc. Reads from `.apl/<path>` directly, so uncommitted edits are visible. Use `--at` to read a historical revision from git history.
 
 ```bash
 apl show plan.md
@@ -77,7 +77,7 @@ apl show plan.md --at HEAD~2
 
 ### `apl ls [path] [--json] [--short] [--status <status>] [--tag <tag>]`
 
-Lists markdown files in `.plans/`, including uncommitted ones, optionally under a subdirectory. The default output is a table showing filename, title, status, and tags. Use `--short` for filename-only output. Use `--status` and `--tag` to filter results (filters combine with AND).
+Lists markdown files in `.apl/`, including uncommitted ones, optionally under a subdirectory. The default output is a table showing filename, title, status, and tags. Use `--short` for filename-only output. Use `--status` and `--tag` to filter results (filters combine with AND).
 
 ```bash
 apl ls
@@ -90,7 +90,7 @@ apl ls --status active --tag cli
 
 ### `apl log [file] [-n <limit>] [--json]`
 
-Shows commit history for all plans, or for a single file.
+Shows commit history for all docs, or for a single file.
 
 ```bash
 apl log
@@ -99,7 +99,7 @@ apl log plan.md -n 5
 
 ### `apl diff [file] [--json]`
 
-Shows uncommitted changes in `.plans/` against HEAD, for all files or one, including new files that have never been committed.
+Shows uncommitted changes in `.apl/` against HEAD, for all files or one, including new files that have never been committed.
 
 ```bash
 apl diff
@@ -108,9 +108,9 @@ apl diff plan.md
 
 ### `apl sync`
 
-Commits any pending changes in `.plans/`, rebases them onto the remote branch, then pushes. If a teammate edited the same lines, sync aborts the rebase, names the conflicting files, and exits with an error without pushing; your local commits are left as they were. Skips gracefully if no remote is configured.
+Commits any pending changes in `.apl/`, rebases them onto the remote branch, then pushes. If a teammate edited the same lines, sync aborts the rebase, names the conflicting files, and exits with an error without pushing; your local commits are left as they were. Skips gracefully if no remote is configured.
 
-`commit`, `add`, and `sync` refuse to run while a rebase or merge inside `.plans/` is unfinished, so conflict markers are never committed as plan content.
+`commit`, `add`, and `sync` refuse to run while a rebase or merge inside `.apl/` is unfinished, so conflict markers are never committed as plan content.
 
 ```bash
 apl sync
@@ -144,15 +144,15 @@ Other keys are kept as written. Stamping changes only the `created` and `updated
 
 ## Agent Integration
 
-- **Normal file I/O**: agents read and write plan files in `.plans/` directly, without shelling out to the CLI for every edit.
+- **Normal file I/O**: agents read and write plan files in `.apl/` directly, without shelling out to the CLI for every edit.
 - **Structured output**: every read command (`show`, `ls`, `log`, `diff`) supports `--json` for scripting and parsing.
-- **Automatic sync**: the auto-commit hook (`apl init --auto-commit`) commits `.plans/` changes automatically after every git commit.
+- **Automatic sync**: the auto-commit hook (`apl init --auto-commit`) commits `.apl/` changes automatically after every git commit.
 
 Example agent workflow:
 
 ```bash
 apl init --auto-commit
-# agent writes .plans/plan.md directly with normal file tools
+# agent writes .apl/plan.md directly with normal file tools
 apl sync                    # push to remote so teammates see it
 apl show plan.md --json     # read back structured plan state later
 ```

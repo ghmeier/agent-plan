@@ -94,13 +94,13 @@ _apl() {
     subcmd)
       local -a subcommands
       subcommands=(
-        'init:Initialize plan storage'
-        'add:Add plan files'
+        'init:Initialize doc storage'
+        'add:Add files to doc storage'
         'commit:Commit pending changes'
         'sync:Sync with remote'
         'log:Show commit history'
-        'show:Show a plan file'
-        'ls:List plan files'
+        'show:Show a doc'
+        'ls:List docs'
         'diff:Show uncommitted changes'
         'completion:Print shell completion script'
       )
@@ -113,18 +113,18 @@ _apl() {
             '--at[Show the file as of a commit ref]:ref:($(apl __complete versions 2>/dev/null))' \\
             '--raw[Print file as-is without metadata header]' \\
             '--json[Output in JSON format]' \\
-            ':plan file:($(apl __complete files 2>/dev/null))'
+            ':doc:($(apl __complete files 2>/dev/null))'
           ;;
         log)
           _arguments \\
             '-n[Limit number of commits]:number:()' \\
             '--json[Output in JSON format]' \\
-            '::plan file:($(apl __complete files 2>/dev/null))'
+            '::doc:($(apl __complete files 2>/dev/null))'
           ;;
         diff)
           _arguments \\
             '--json[Output in JSON format]' \\
-            '::plan file:($(apl __complete files 2>/dev/null))'
+            '::doc:($(apl __complete files 2>/dev/null))'
           ;;
         ls)
           _arguments \\
@@ -135,7 +135,7 @@ _apl() {
           ;;
         init)
           _arguments \\
-            '--branch[Branch name for plan storage]:branch:()' \\
+            '--branch[Branch name for doc storage]:branch:()' \\
             '--auto-commit[Install auto-commit hook]' \\
             '--no-auto-commit[Remove auto-commit hook]'
           ;;
@@ -163,13 +163,13 @@ function fishScript(): string {
 complete -c apl -f
 
 # Subcommands
-complete -c apl -n '__fish_use_subcommand' -a init       -d 'Initialize plan storage'
-complete -c apl -n '__fish_use_subcommand' -a add        -d 'Add plan files'
+complete -c apl -n '__fish_use_subcommand' -a init       -d 'Initialize doc storage'
+complete -c apl -n '__fish_use_subcommand' -a add        -d 'Add files to doc storage'
 complete -c apl -n '__fish_use_subcommand' -a commit     -d 'Commit pending changes'
 complete -c apl -n '__fish_use_subcommand' -a sync       -d 'Sync with remote'
 complete -c apl -n '__fish_use_subcommand' -a log        -d 'Show commit history'
-complete -c apl -n '__fish_use_subcommand' -a show       -d 'Show a plan file'
-complete -c apl -n '__fish_use_subcommand' -a ls         -d 'List plan files'
+complete -c apl -n '__fish_use_subcommand' -a show       -d 'Show a doc'
+complete -c apl -n '__fish_use_subcommand' -a ls         -d 'List docs'
 complete -c apl -n '__fish_use_subcommand' -a diff       -d 'Show uncommitted changes'
 complete -c apl -n '__fish_use_subcommand' -a completion -d 'Print shell completion script'
 

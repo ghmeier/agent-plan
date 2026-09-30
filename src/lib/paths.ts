@@ -1,35 +1,37 @@
-import { realpath, stat } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import path from "node:path";
 import { AgentPlanError, NotARepoError } from "./errors";
-import { execGit } from "./git";
+import { execGit, runGit } from "./git";
 
-async function exists(candidate: string): Promise<boolean> {
-  try {
-    await stat(candidate);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
+/**
+ * Returns the checkout that contains `startDir`. From inside the store
+ * worktree itself (someone `cd`s into `.apl/`, whose real path is under
+ * `.git/`), returns the main checkout instead, since the store is not a
+ * checkout of the code.
+ */
 export async function findRepoRoot(startDir?: string): Promise<string> {
-  let dir = path.resolve(startDir ?? process.cwd());
+  const cwd = path.resolve(startDir ?? process.cwd());
+  const toplevel = await runGit(["rev-parse", "--show-toplevel"], cwd);
+  if (toplevel.exitCode !== 0) throw new NotARepoError();
 
-  while (true) {
-    if (await exists(path.join(dir, ".git"))) {
-      return dir;
-    }
+  const root = toplevel.stdout.trim();
+  const storeDir = getStoreDir(await getGitCommonDir(root));
+  if ((await realpathSafe(root)) === (await realpathSafe(storeDir))) {
+    return getMainWorktreeRoot(root);
+  }
+  return root;
+}
 
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      throw new NotARepoError();
-    }
-
-    dir = parent;
+export async function realpathSafe(p: string): Promise<string> {
+  try {
+    return await realpath(p);
+  } catch {
+    return p;
   }
 }
 
-const PLANS_DIR_NAME = ".plans";
+/** The name of the symlink to the store that apl keeps in every checkout. */
+export const STORE_LINK_NAME = ".apl";
 
 function repoRelative(repoRoot: string, absolutePath: string): string | null {
   const relative = path.relative(repoRoot, absolutePath);
@@ -38,15 +40,15 @@ function repoRelative(repoRoot: string, absolutePath: string): string | null {
 }
 
 /**
- * Maps a file inside the repo to the path it's stored at in `.plans/`: its
- * repo-relative path, or, for a file already inside `.plans/`, its path there.
+ * Maps a file inside the repo to the path it's stored at in the store: its
+ * repo-relative path, or, for a file already inside `.apl/`, its path there.
  * Throws for files outside the repo, which have no repo-relative path.
  */
 export async function resolvePlanPath(repoRoot: string, absolutePath: string): Promise<string> {
-  // The unresolved path is tried first because in a secondary checkout
-  // `.plans` is a symlink into the main checkout, and resolving it would put
-  // the file outside this checkout. The resolved pair covers macOS paths that
-  // differ only by a symlinked prefix such as /var and /private/var.
+  // The unresolved path is tried first because `.apl` is a symlink into the
+  // git directory, and resolving it would put the file outside the checkout.
+  // The resolved pair covers macOS paths that differ only by a symlinked
+  // prefix such as /var and /private/var.
   const relative =
     repoRelative(repoRoot, absolutePath) ??
     repoRelative(await realpath(repoRoot), await realpath(absolutePath));
@@ -55,12 +57,22 @@ export async function resolvePlanPath(repoRoot: string, absolutePath: string): P
     throw new AgentPlanError(`${absolutePath} is outside the repository at ${repoRoot}`);
   }
 
-  const plansPrefix = `${PLANS_DIR_NAME}/`;
-  return relative.startsWith(plansPrefix) ? relative.slice(plansPrefix.length) : relative;
+  const storePrefix = `${STORE_LINK_NAME}/`;
+  return relative.startsWith(storePrefix) ? relative.slice(storePrefix.length) : relative;
 }
 
-export function getPlansDir(repoRoot: string): string {
-  return path.join(repoRoot, PLANS_DIR_NAME);
+/** The `.apl` symlink in a checkout. */
+export function getStoreLink(repoRoot: string): string {
+  return path.join(repoRoot, STORE_LINK_NAME);
+}
+
+/**
+ * The store worktree, where the docs branch is checked out. It lives in the
+ * shared git directory so it belongs to no single checkout: every checkout
+ * links to it, and removing or moving any checkout leaves it intact.
+ */
+export function getStoreDir(gitCommonDir: string): string {
+  return path.join(gitCommonDir, "agent-plan", "worktree");
 }
 
 /** Returns the absolute path to the shared git directory (same as .git in main checkout,

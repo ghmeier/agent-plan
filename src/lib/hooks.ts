@@ -5,22 +5,22 @@ import { gitPath, INTERNAL_ENV_VAR } from "./git";
 const MARKER = "agent-plan";
 
 const HOOK_SCRIPT = `#!/bin/sh
-# agent-plan: auto-commit plan changes
+# agent-plan: auto-commit doc changes
 # Installed by 'apl init --auto-commit'. Remove with 'apl init --no-auto-commit'.
 
-# apl's own commits inside .plans/ also run this hook. Skip those so the hook
+# apl's own commits inside .apl/ also run this hook. Skip those so the hook
 # doesn't start another apl commit from inside one.
 [ -n "$${INTERNAL_ENV_VAR}" ] && exit 0
 
-message="Auto-commit: plan changes after $(git log -1 --format='%h %s')"
+message="Auto-commit: doc changes after $(git log -1 --format='%h %s')"
 
 # Git runs hooks with variables such as GIT_INDEX_FILE pointing at the code
-# checkout. Inherited by the git commands apl runs inside .plans/, they would
-# make git use the code checkout's index and the plan commit would fail.
+# checkout. Inherited by the git commands apl runs inside .apl/, they would
+# make git use the code checkout's index and the doc commit would fail.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
 
 if command -v apl >/dev/null 2>&1; then
-  apl commit -m "$message" >/dev/null || echo "apl: auto-commit of plan changes failed" >&2
+  apl commit -m "$message" >/dev/null || echo "apl: auto-commit of doc changes failed" >&2
 fi
 `;
 

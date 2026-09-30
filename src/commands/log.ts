@@ -2,8 +2,8 @@ import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { execGit } from "../lib/git";
 import { info } from "../lib/output";
-import { findRepoRoot, getPlansDir } from "../lib/paths";
-import { ensurePlansWorktree } from "../lib/worktree";
+import { findRepoRoot } from "../lib/paths";
+import { ensureStore } from "../lib/worktree";
 
 export interface LogEntry {
   hash: string;
@@ -18,7 +18,7 @@ const LOG_FIELD_SEP = "\x1f";
 const LOG_RECORD_SEP = "\x1e";
 
 async function getLogFromWorktree(
-  plansDir: string,
+  storeDir: string,
   file?: string,
   limit?: number,
 ): Promise<LogEntry[]> {
@@ -27,7 +27,7 @@ async function getLogFromWorktree(
   if (limit !== undefined) args.push("-n", String(limit));
   if (file) args.push("--", file);
 
-  const stdout = await execGit(args, plansDir);
+  const stdout = await execGit(args, storeDir);
 
   return stdout
     .split(LOG_RECORD_SEP)
@@ -53,10 +53,9 @@ export async function getPlanLog(
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
 
-  await ensurePlansWorktree(repoRoot, config);
+  const storeDir = await ensureStore(repoRoot, config);
 
-  const plansDir = getPlansDir(repoRoot);
-  const entries = await getLogFromWorktree(plansDir, file, limit);
+  const entries = await getLogFromWorktree(storeDir, file, limit);
 
   if (options.json) {
     console.log(JSON.stringify({ entries }));
@@ -72,7 +71,7 @@ function formatLogEntry(entry: LogEntry): string {
 export function registerLog(program: Command): void {
   program
     .command("log [file]")
-    .description("Show the commit history of the plans branch")
+    .description("Show the commit history of the docs branch")
     .option("-n, --limit <number>", "Limit number of entries", String(DEFAULT_LIMIT))
     .option("--json", "Output in JSON format")
     .action(async (file: string | undefined, options: { limit: string; json?: boolean }) => {

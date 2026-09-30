@@ -1,9 +1,9 @@
 export interface PlanConfig {
-  branch: string; // git branch name, default "plans"
+  branch: string; // git branch name, default "apl"
   remote: string; // git remote name, default "origin"
 }
 
 export const DEFAULT_CONFIG: PlanConfig = {
-  branch: "plans",
+  branch: "apl",
   remote: "origin",
 };

@@ -55,7 +55,7 @@ async function lsShort(repo: Repo, args: readonly string[] = []): Promise<string
 describe("apl show", () => {
   test("show prints a metadata header followed by the body without frontmatter", async () => {
     await using repo = await createInitializedRepo();
-    await Bun.write(join(repo.plansDir, "cli.md"), CLI_PLAN);
+    await Bun.write(join(repo.storeDir, "cli.md"), CLI_PLAN);
 
     const result = await apl(repo.dir, ["show", "cli.md"]);
 
@@ -70,7 +70,7 @@ describe("apl show", () => {
 
   test("show prints a file without frontmatter as-is", async () => {
     await using repo = await createInitializedRepo();
-    await Bun.write(join(repo.plansDir, "plain.md"), "# Plain\n");
+    await Bun.write(join(repo.storeDir, "plain.md"), "# Plain\n");
 
     const result = await apl(repo.dir, ["show", "plain.md"]);
 
@@ -79,7 +79,7 @@ describe("apl show", () => {
 
   test("show --raw prints the file exactly as stored", async () => {
     await using repo = await createInitializedRepo();
-    await Bun.write(join(repo.plansDir, "cli.md"), CLI_PLAN);
+    await Bun.write(join(repo.storeDir, "cli.md"), CLI_PLAN);
 
     const result = await apl(repo.dir, ["show", "cli.md", "--raw"]);
 
@@ -88,7 +88,7 @@ describe("apl show", () => {
 
   test("show --json returns the raw content, parsed metadata, and body", async () => {
     await using repo = await createInitializedRepo();
-    await Bun.write(join(repo.plansDir, "cli.md"), CLI_PLAN);
+    await Bun.write(join(repo.storeDir, "cli.md"), CLI_PLAN);
 
     const result = await apl(repo.dir, ["show", "cli.md", "--json"]);
 
@@ -106,10 +106,10 @@ describe("apl show", () => {
     });
   });
 
-  test("show reads uncommitted edits from .plans/", async () => {
+  test("show reads uncommitted edits from .apl/", async () => {
     await using repo = await createInitializedRepo();
     await addPlan(repo, "plan.md", "# Committed\n");
-    await Bun.write(join(repo.plansDir, "plan.md"), "# Uncommitted\n");
+    await Bun.write(join(repo.storeDir, "plan.md"), "# Uncommitted\n");
 
     const result = await apl(repo.dir, ["show", "plan.md", "--raw"]);
 
@@ -162,7 +162,7 @@ describe("apl show", () => {
   test("show treats malformed frontmatter YAML as part of the body", async () => {
     await using repo = await createInitializedRepo();
     const content = "---\n: bad: yaml: [unclosed\n---\n# Body\n";
-    await Bun.write(join(repo.plansDir, "plan.md"), content);
+    await Bun.write(join(repo.storeDir, "plan.md"), content);
 
     const result = await apl(repo.dir, ["show", "plan.md", "--json"]);
 
@@ -171,7 +171,7 @@ describe("apl show", () => {
 
   test("show warns about an unknown status and drops it from the metadata", async () => {
     await using repo = await createInitializedRepo();
-    await Bun.write(join(repo.plansDir, "plan.md"), "---\ntitle: Plan\nstatus: bogus\n---\n");
+    await Bun.write(join(repo.storeDir, "plan.md"), "---\ntitle: Plan\nstatus: bogus\n---\n");
 
     const result = await apl(repo.dir, ["show", "plan.md"]);
 
@@ -183,7 +183,7 @@ describe("apl show", () => {
 
   test("show --json stays parseable when a file has an unknown status", async () => {
     await using repo = await createInitializedRepo();
-    await Bun.write(join(repo.plansDir, "plan.md"), "---\ntitle: Plan\nstatus: bogus\n---\n");
+    await Bun.write(join(repo.storeDir, "plan.md"), "---\ntitle: Plan\nstatus: bogus\n---\n");
 
     const result = await apl(repo.dir, ["show", "plan.md", "--json"]);
 
@@ -233,8 +233,8 @@ describe("apl ls", () => {
   test("ls includes uncommitted files and files without frontmatter", async () => {
     await using repo = await createInitializedRepo();
     await addPlan(repo, "committed.md", "# Committed\n");
-    await Bun.write(join(repo.plansDir, "draft.md"), "# Draft\n");
-    await Bun.write(join(repo.plansDir, "notes.txt"), "not markdown");
+    await Bun.write(join(repo.storeDir, "draft.md"), "# Draft\n");
+    await Bun.write(join(repo.storeDir, "notes.txt"), "not markdown");
 
     expect(await lsShort(repo)).toEqual(["committed.md", "draft.md"]);
   });
@@ -278,7 +278,7 @@ describe("apl log", () => {
     const lines = result.stdout.trimEnd().split("\n");
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatch(/^[0-9a-f]{7} \d{4}-\d{2}-\d{2}T\S+ Add plan$/);
-    expect(lines[1]).toEndWith(" Initialize plans");
+    expect(lines[1]).toEndWith(" Initialize docs");
   });
 
   test("log --json returns full commit details", async () => {
@@ -325,7 +325,7 @@ describe("apl log", () => {
 describe("apl diff", () => {
   test("diff includes a new file that has never been committed", async () => {
     await using repo = await createInitializedRepo();
-    await Bun.write(join(repo.plansDir, "new plan.md"), "# New\n");
+    await Bun.write(join(repo.storeDir, "new plan.md"), "# New\n");
 
     const result = await apl(repo.dir, ["diff"]);
 
@@ -337,8 +337,8 @@ describe("apl diff", () => {
     await using repo = await createInitializedRepo();
     await addPlan(repo, "plan.md", "# Plan\n");
     await addPlan(repo, "other.md", "# Other\n");
-    await Bun.write(join(repo.plansDir, "plan.md"), "# Plan, edited\n");
-    await Bun.write(join(repo.plansDir, "other.md"), "# Other, edited\n");
+    await Bun.write(join(repo.storeDir, "plan.md"), "# Plan, edited\n");
+    await Bun.write(join(repo.storeDir, "other.md"), "# Other, edited\n");
 
     const result = await apl(repo.dir, ["diff", "plan.md"]);
 
@@ -351,7 +351,7 @@ describe("apl diff", () => {
     await addPlan(repo, "plan.md", "# Plan\n");
 
     const clean = JSON.parse((await apl(repo.dir, ["diff", "--json"])).stdout);
-    await Bun.write(join(repo.plansDir, "plan.md"), "# Plan, edited\n");
+    await Bun.write(join(repo.storeDir, "plan.md"), "# Plan, edited\n");
     const edited = JSON.parse((await apl(repo.dir, ["diff", "plan.md", "--json"])).stdout);
 
     expect(clean).toEqual({ path: null, changed: false, diff: "" });

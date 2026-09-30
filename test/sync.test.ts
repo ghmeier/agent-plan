@@ -42,20 +42,20 @@ describe("apl sync", () => {
     const result = await apl(repo.dir, ["sync"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Synced plans with origin");
-    expect(await git(remote.dir, ["show", "plans:plan.md"])).toBe("# Plan");
+    expect(result.stdout).toContain("Synced docs with origin");
+    expect(await git(remote.dir, ["show", "apl:plan.md"])).toBe("# Plan");
   });
 
-  test("sync commits pending edits in .plans/ before pushing", async () => {
+  test("sync commits pending edits in .apl/ before pushing", async () => {
     await using remote = await createRemote();
     await using repo = await createInitializedRepo();
     await addOrigin(repo, remote);
-    await Bun.write(join(repo.plansDir, "draft.md"), "# Draft\n");
+    await Bun.write(join(repo.storeDir, "draft.md"), "# Draft\n");
 
     await apl(repo.dir, ["sync"]);
 
-    expect(await git(remote.dir, ["show", "plans:draft.md"])).toBe("# Draft");
-    expect(await planLogMessages(repo, ["-n", "1"])).toEqual(["Update plans"]);
+    expect(await git(remote.dir, ["show", "apl:draft.md"])).toBe("# Draft");
+    expect(await planLogMessages(repo, ["-n", "1"])).toEqual(["Update docs"]);
   });
 
   test("sync works with a remote URL relative to the repo root", async () => {
@@ -67,7 +67,7 @@ describe("apl sync", () => {
     const result = await apl(repo.dir, ["sync"]);
 
     expect(result.exitCode).toBe(0);
-    expect(await git(remote.dir, ["show", "plans:plan.md"])).toBe("# Plan");
+    expect(await git(remote.dir, ["show", "apl:plan.md"])).toBe("# Plan");
   });
 
   test("sync without a remote skips cleanly", async () => {
@@ -99,7 +99,7 @@ describe("apl sync", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("push failed");
-    expect(result.stdout).not.toContain("Synced plans");
+    expect(result.stdout).not.toContain("Synced docs");
   });
 });
 
@@ -151,7 +151,7 @@ describe("collaborating through a shared remote", () => {
     const result = await apl(teammate.dir, ["sync"]);
 
     expect(result.exitCode).toBe(0);
-    expect(await git(remote.dir, ["ls-tree", "--name-only", "plans"])).toBe(
+    expect(await git(remote.dir, ["ls-tree", "--name-only", "apl"])).toBe(
       "first.md\nsecond.md\nshared.md",
     );
   });
@@ -160,15 +160,15 @@ describe("collaborating through a shared remote", () => {
     await using remote = await createRemote();
     await using publisher = await createPublishingRepo(remote);
     await using teammate = await createTeammateRepo(remote);
-    await Bun.write(join(publisher.plansDir, "shared.md"), "# Publisher's version\n");
+    await Bun.write(join(publisher.storeDir, "shared.md"), "# Publisher's version\n");
     await apl(publisher.dir, ["sync"]);
-    await Bun.write(join(teammate.plansDir, "shared.md"), "# Teammate's version\n");
+    await Bun.write(join(teammate.storeDir, "shared.md"), "# Teammate's version\n");
 
     const result = await apl(teammate.dir, ["sync"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("conflict with origin/plans in: shared.md");
-    expect(await git(remote.dir, ["show", "plans:shared.md"])).toBe("# Publisher's version");
+    expect(result.stderr).toContain("conflict with origin/apl in: shared.md");
+    expect(await git(remote.dir, ["show", "apl:shared.md"])).toBe("# Publisher's version");
     expect((await apl(teammate.dir, ["show", "shared.md", "--raw"])).stdout).toBe(
       "# Teammate's version\n",
     );

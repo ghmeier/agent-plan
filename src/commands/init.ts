@@ -4,7 +4,7 @@ import { branchExists, createOrphanBranch, execGit } from "../lib/git";
 import { installAutoCommitHook, removeAutoCommitHook } from "../lib/hooks";
 import { success } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
-import { ensurePlansWorktree } from "../lib/worktree";
+import { ensureStore } from "../lib/worktree";
 import { DEFAULT_CONFIG } from "../types";
 
 export async function initPlans(
@@ -36,7 +36,7 @@ export async function initPlans(
     }
   }
 
-  await ensurePlansWorktree(repoRoot, { branch, remote }, true);
+  await ensureStore(repoRoot, { branch, remote }, true);
 
   await writeConfig(repoRoot, { branch, remote });
 
@@ -47,18 +47,18 @@ export async function initPlans(
   }
 
   if (alreadyExisted) {
-    success(`Plan storage already initialized (branch '${branch}' exists)`);
+    success(`Doc storage already initialized (branch '${branch}' exists)`);
   } else {
-    success(`Initialized plan storage on branch '${branch}'`);
+    success(`Initialized doc storage on branch '${branch}'`);
   }
 }
 
 export function registerInit(program: Command): void {
   program
     .command("init")
-    .description("Initialize plan storage in the current repository")
-    .option("--branch <name>", "Branch name for plan storage (default: plans)")
-    .option("--auto-commit", "Install a post-commit hook that auto-commits plan changes")
+    .description("Initialize doc storage in the current repository")
+    .option("--branch <name>", "Branch name for doc storage (default: apl)")
+    .option("--auto-commit", "Install a post-commit hook that auto-commits doc changes")
     .option("--no-auto-commit", "Remove the auto-commit hook if one is installed")
     .action(async (opts) => {
       await initPlans(opts);

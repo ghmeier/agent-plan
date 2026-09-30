@@ -1,12 +1,12 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { execGit, runGit } from "../lib/git";
-import { findRepoRoot, getPlansDir } from "../lib/paths";
-import { ensurePlansWorktree } from "../lib/worktree";
+import { findRepoRoot } from "../lib/paths";
+import { ensureStore } from "../lib/worktree";
 
 /** git diff exits 0 (no diff) or 1 (diff found); anything else is a real error. */
-async function runDiff(args: string[], plansDir: string): Promise<string> {
-  const { exitCode, stdout, stderr } = await runGit(["diff", ...args], plansDir);
+async function runDiff(args: string[], storeDir: string): Promise<string> {
+  const { exitCode, stdout, stderr } = await runGit(["diff", ...args], storeDir);
   if (exitCode > 1) {
     throw new Error(`git diff ${args.join(" ")} failed (exit ${exitCode}): ${stderr.trim()}`);
   }
@@ -14,19 +14,19 @@ async function runDiff(args: string[], plansDir: string): Promise<string> {
 }
 
 /** Diffs tracked files against HEAD, plus new files that `git diff` alone would leave out. */
-async function gitDiff(plansDir: string, planPath?: string): Promise<string> {
+async function gitDiff(storeDir: string, planPath?: string): Promise<string> {
   const pathspec = planPath ? ["--", planPath] : [];
-  const tracked = await runDiff(["HEAD", ...pathspec], plansDir);
+  const tracked = await runDiff(["HEAD", ...pathspec], storeDir);
 
   const untrackedList = await execGit(
     ["ls-files", "--others", "--exclude-standard", "-z", ...pathspec],
-    plansDir,
+    storeDir,
   );
   const untracked = await Promise.all(
     untrackedList
       .split("\0")
       .filter(Boolean)
-      .map((file) => runDiff(["--no-index", "--", "/dev/null", file], plansDir)),
+      .map((file) => runDiff(["--no-index", "--", "/dev/null", file], storeDir)),
   );
 
   return tracked + untracked.join("");
@@ -40,10 +40,9 @@ export async function diffPlan(
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
 
-  await ensurePlansWorktree(repoRoot, config);
+  const storeDir = await ensureStore(repoRoot, config);
 
-  const plansDir = getPlansDir(repoRoot);
-  const diffOutput = await gitDiff(plansDir, file);
+  const diffOutput = await gitDiff(storeDir, file);
 
   if (options.json) {
     console.log(
@@ -57,7 +56,7 @@ export async function diffPlan(
 export function registerDiff(program: Command): void {
   program
     .command("diff [file]")
-    .description("Show uncommitted changes in .plans/ against HEAD")
+    .description("Show uncommitted changes in .apl/ against HEAD")
     .option("--json", "Output in JSON format")
     .action(async (file: string | undefined, options: { json?: boolean }) => {
       const diffOutput = await diffPlan(file, undefined, options);

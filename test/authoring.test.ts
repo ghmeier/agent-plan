@@ -30,18 +30,18 @@ async function installRejectingPreCommitHook(repo: Repo): Promise<void> {
 }
 
 /**
- * Leaves `.plans/` mid-rebase with a conflict in `planPath`: two branches edit
- * the same line, and the plans branch is rebased onto the other.
+ * Leaves `.apl/` mid-rebase with a conflict in `planPath`: two branches edit
+ * the same line, and the docs branch is rebased onto the other.
  */
 async function startConflictedRebase(repo: Repo, planPath: string): Promise<void> {
   await addPlan(repo, planPath, "# Base\n");
-  await git(repo.plansDir, ["checkout", "-q", "-b", "theirs"]);
-  await Bun.write(join(repo.plansDir, planPath), "# Theirs\n");
-  await git(repo.plansDir, ["commit", "-q", "-am", "Theirs"]);
-  await git(repo.plansDir, ["checkout", "-q", "plans"]);
-  await Bun.write(join(repo.plansDir, planPath), "# Ours\n");
-  await git(repo.plansDir, ["commit", "-q", "-am", "Ours"]);
-  await run(["git", "rebase", "theirs"], repo.plansDir);
+  await git(repo.storeDir, ["checkout", "-q", "-b", "theirs"]);
+  await Bun.write(join(repo.storeDir, planPath), "# Theirs\n");
+  await git(repo.storeDir, ["commit", "-q", "-am", "Theirs"]);
+  await git(repo.storeDir, ["checkout", "-q", "apl"]);
+  await Bun.write(join(repo.storeDir, planPath), "# Ours\n");
+  await git(repo.storeDir, ["commit", "-q", "-am", "Ours"]);
+  await run(["git", "rebase", "theirs"], repo.storeDir);
 }
 
 describe("apl add", () => {
@@ -52,7 +52,7 @@ describe("apl add", () => {
     const result = await apl(repo.dir, ["add", "plan.md"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Added 1 file(s) to plans");
+    expect(result.stdout).toContain("Added 1 file(s) to docs");
     expect(await showRaw(repo, "plan.md")).toBe("# Plan\n");
     expect(await planLogMessages(repo, ["-n", "1"])).toEqual(["Add plan.md"]);
   });
@@ -66,7 +66,7 @@ describe("apl add", () => {
 
     expect(await showRaw(repo, "a.md")).toBe("# A\n");
     expect(await showRaw(repo, "b.md")).toBe("# B\n");
-    expect(await planLogMessages(repo)).toEqual(["Add a.md, b.md", "Initialize plans"]);
+    expect(await planLogMessages(repo)).toEqual(["Add a.md, b.md", "Initialize docs"]);
   });
 
   test("add with -m uses the given commit message", async () => {
@@ -118,14 +118,14 @@ describe("apl add", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("is outside the repository");
-    expect(await planLogMessages(repo)).toEqual(["Initialize plans"]);
+    expect(await planLogMessages(repo)).toEqual(["Initialize docs"]);
   });
 
-  test("add with a file already in .plans/ commits it in place", async () => {
+  test("add with a file already in .apl/ commits it in place", async () => {
     await using repo = await createInitializedRepo();
-    await Bun.write(join(repo.plansDir, "auth", "plan.md"), "# Plan\n");
+    await Bun.write(join(repo.storeDir, "auth", "plan.md"), "# Plan\n");
 
-    const result = await apl(repo.dir, ["add", ".plans/auth/plan.md"]);
+    const result = await apl(repo.dir, ["add", ".apl/auth/plan.md"]);
 
     expect(result.exitCode).toBe(0);
     expect((await apl(repo.dir, ["ls", "--short"])).stdout).toBe("auth/plan.md\n");
@@ -140,7 +140,7 @@ describe("apl add", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("nothing to commit");
-    expect(await planLogMessages(repo)).toEqual(["Add plan.md", "Initialize plans"]);
+    expect(await planLogMessages(repo)).toEqual(["Add plan.md", "Initialize docs"]);
   });
 
   test("add that fails to commit leaves nothing staged for the next commit", async () => {
@@ -151,7 +151,7 @@ describe("apl add", () => {
     const add = await apl(repo.dir, ["add", "plan.md"]);
 
     expect(add.exitCode).not.toBe(0);
-    expect(await git(repo.plansDir, ["diff", "--cached", "--name-only"])).toBe("");
+    expect(await git(repo.storeDir, ["diff", "--cached", "--name-only"])).toBe("");
   });
 
   test("add with a missing file fails without committing", async () => {
@@ -161,15 +161,15 @@ describe("apl add", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("File not found: missing.md");
-    expect(await planLogMessages(repo)).toEqual(["Initialize plans"]);
+    expect(await planLogMessages(repo)).toEqual(["Initialize docs"]);
   });
 });
 
-describe("editing plans in .plans/ and committing", () => {
+describe("editing plans in .apl/ and committing", () => {
   test("edits show up in diff until commit records them", async () => {
     await using repo = await createInitializedRepo();
     await addPlan(repo, "plan.md", "# Plan\n");
-    await Bun.write(join(repo.plansDir, "plan.md"), "# Plan\n\nNew step.\n");
+    await Bun.write(join(repo.storeDir, "plan.md"), "# Plan\n\nNew step.\n");
 
     const before = await apl(repo.dir, ["diff"]);
     const commit = await apl(repo.dir, ["commit", "-m", "Add a step"]);
@@ -177,7 +177,7 @@ describe("editing plans in .plans/ and committing", () => {
 
     expect(before.stdout).toContain("+New step.");
     expect(commit.exitCode).toBe(0);
-    expect(commit.stdout).toContain("Committed plan changes");
+    expect(commit.stdout).toContain("Committed doc changes");
     expect(after.stdout).toBe("No changes\n");
     expect(await planLogMessages(repo, ["-n", "1"])).toEqual(["Add a step"]);
   });
@@ -185,19 +185,19 @@ describe("editing plans in .plans/ and committing", () => {
   test("commit records new and deleted files with a default message", async () => {
     await using repo = await createInitializedRepo();
     await addPlan(repo, "old.md", "# Old\n");
-    await rm(join(repo.plansDir, "old.md"));
-    await Bun.write(join(repo.plansDir, "new.md"), "# New\n");
+    await rm(join(repo.storeDir, "old.md"));
+    await Bun.write(join(repo.storeDir, "new.md"), "# New\n");
 
     await apl(repo.dir, ["commit"]);
 
     expect((await apl(repo.dir, ["ls", "--short"])).stdout).toBe("new.md\n");
     expect((await apl(repo.dir, ["diff"])).stdout).toBe("No changes\n");
-    expect(await planLogMessages(repo, ["-n", "1"])).toEqual(["Update plans"]);
+    expect(await planLogMessages(repo, ["-n", "1"])).toEqual(["Update docs"]);
   });
 
   test("commit handles file names with spaces", async () => {
     await using repo = await createInitializedRepo();
-    await Bun.write(join(repo.plansDir, "my plan.md"), "---\ntitle: Mine\n---\n# Plan\n");
+    await Bun.write(join(repo.storeDir, "my plan.md"), "---\ntitle: Mine\n---\n# Plan\n");
 
     await apl(repo.dir, ["commit"]);
 
@@ -205,7 +205,7 @@ describe("editing plans in .plans/ and committing", () => {
     expect((await apl(repo.dir, ["diff"])).stdout).toBe("No changes\n");
   });
 
-  test("commit refuses to run while a rebase in .plans/ is unfinished", async () => {
+  test("commit refuses to run while a rebase in .apl/ is unfinished", async () => {
     await using repo = await createInitializedRepo();
     await startConflictedRebase(repo, "plan.md");
 
@@ -213,7 +213,7 @@ describe("editing plans in .plans/ and committing", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("A rebase is in progress");
-    expect(await git(repo.plansDir, ["show", "HEAD:plan.md"])).not.toContain("<<<<<<<");
+    expect(await git(repo.storeDir, ["show", "HEAD:plan.md"])).not.toContain("<<<<<<<");
   });
 
   test("commit with no pending changes reports nothing to commit", async () => {
@@ -224,7 +224,7 @@ describe("editing plans in .plans/ and committing", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Nothing to commit");
-    expect(await planLogMessages(repo)).toEqual(["Add plan.md", "Initialize plans"]);
+    expect(await planLogMessages(repo)).toEqual(["Add plan.md", "Initialize docs"]);
   });
 });
 
@@ -264,7 +264,7 @@ describe("frontmatter timestamps", () => {
 
   test("commit keeps frontmatter keys apl doesn't know about", async () => {
     await using repo = await createInitializedRepo();
-    await Bun.write(join(repo.plansDir, "plan.md"), "---\nbranch: feature/auth\npr: 42\n---\n");
+    await Bun.write(join(repo.storeDir, "plan.md"), "---\nbranch: feature/auth\npr: 42\n---\n");
 
     await apl(repo.dir, ["commit"]);
 
@@ -284,11 +284,11 @@ describe("frontmatter timestamps", () => {
   test("commit refreshes updated on edited files and leaves unchanged files alone", async () => {
     await using repo = await createInitializedRepo();
     const stale = "---\ncreated: 2020-01-01\nupdated: 2020-01-01\n---\n";
-    await Bun.write(join(repo.plansDir, "edited.md"), `${stale}# Edited\n`);
-    await Bun.write(join(repo.plansDir, "untouched.md"), `${stale}# Untouched\n`);
-    await git(repo.plansDir, ["add", "-A"]);
-    await git(repo.plansDir, ["commit", "-m", "Seed plans with old dates"]);
-    await Bun.write(join(repo.plansDir, "edited.md"), `${stale}# Edited again\n`);
+    await Bun.write(join(repo.storeDir, "edited.md"), `${stale}# Edited\n`);
+    await Bun.write(join(repo.storeDir, "untouched.md"), `${stale}# Untouched\n`);
+    await git(repo.storeDir, ["add", "-A"]);
+    await git(repo.storeDir, ["commit", "-m", "Seed plans with old dates"]);
+    await Bun.write(join(repo.storeDir, "edited.md"), `${stale}# Edited again\n`);
 
     await apl(repo.dir, ["commit"]);
 

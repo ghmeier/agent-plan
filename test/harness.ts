@@ -1,4 +1,4 @@
-import { chmod, cp, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -118,11 +118,12 @@ export async function createTempDir(): Promise<TempDir> {
 }
 
 export interface Repo extends TempDir {
-  plansDir: string;
+  /** The checkout's `.apl` link to the docs store. */
+  storeDir: string;
 }
 
 function toRepo(temp: TempDir): Repo {
-  return { ...temp, plansDir: join(temp.dir, ".plans") };
+  return { ...temp, storeDir: join(temp.dir, ".apl") };
 }
 
 const emptyRepoTemplate = (async () => {
@@ -157,8 +158,12 @@ export function createRepo(): Promise<Repo> {
 /** A git repo where `apl init` has already run. */
 export async function createInitializedRepo(): Promise<Repo> {
   const repo = await copyTemplate(initializedRepoTemplate);
-  // The copied `.plans/` worktree still links to the template by absolute path.
-  await git(repo.dir, ["worktree", "repair", repo.plansDir]);
+  // The copied store worktree and `.apl` link still point at the template by
+  // absolute path. Left alone, writes through `.apl` would land in the template.
+  const store = join(repo.dir, ".git", "agent-plan", "worktree");
+  await git(repo.dir, ["worktree", "repair", store]);
+  await rm(repo.storeDir);
+  await symlink(store, repo.storeDir);
   return repo;
 }
 
@@ -176,7 +181,7 @@ export async function addOrigin(repo: Repo, remote: TempDir): Promise<void> {
 
 /**
  * Writes `content` to `planPath` in the code checkout and runs `apl add` on
- * it, the way a user brings a plan under storage.
+ * it, the way a user brings a doc under storage.
  */
 export async function addPlan(
   repo: Repo,
@@ -197,7 +202,7 @@ export interface LogEntry {
   author: string;
 }
 
-/** Commit messages on the plans branch, newest first, read through `apl log --json`. */
+/** Commit messages on the docs branch, newest first, read through `apl log --json`. */
 export async function planLogMessages(repo: Repo, args: string[] = []): Promise<string[]> {
   const result = await apl(repo.dir, ["log", "--json", ...args]);
   const { entries } = JSON.parse(result.stdout) as { entries: LogEntry[] };

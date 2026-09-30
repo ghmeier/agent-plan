@@ -3,9 +3,9 @@ import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
 import { colors, info } from "../lib/output";
-import { findRepoRoot, getPlansDir } from "../lib/paths";
+import { findRepoRoot } from "../lib/paths";
 import { listMarkdownFiles } from "../lib/plan-files";
-import { ensurePlansWorktree } from "../lib/worktree";
+import { ensureStore } from "../lib/worktree";
 
 export interface LsOptions {
   json?: boolean;
@@ -27,16 +27,15 @@ export async function listPlans(
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
 
-  await ensurePlansWorktree(repoRoot, config);
+  const storeDir = await ensureStore(repoRoot, config);
 
-  const plansDir = getPlansDir(repoRoot);
-  const searchDir = path ? join(plansDir, path) : plansDir;
+  const searchDir = path ? join(storeDir, path) : storeDir;
 
-  const allFiles = await listMarkdownFiles(searchDir, plansDir);
+  const allFiles = await listMarkdownFiles(searchDir, storeDir);
 
   const entries: PlanEntry[] = await Promise.all(
     allFiles.map(async (file) => {
-      const raw = await Bun.file(join(plansDir, file)).text();
+      const raw = await Bun.file(join(storeDir, file)).text();
       const { meta } = parseFrontmatter(raw);
       return { file, meta };
     }),
@@ -105,7 +104,7 @@ function printTable(entries: PlanEntry[]): void {
 export function registerLs(program: Command): void {
   program
     .command("ls [path]")
-    .description("List plan files in .plans/")
+    .description("List docs in .apl/")
     .option("--json", "Output in JSON format")
     .option("--short", "Filename-only output (one per line)")
     .option("--status <status>", "Filter by status (draft, active, completed, archived)")
