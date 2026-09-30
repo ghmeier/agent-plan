@@ -206,29 +206,30 @@ Other keys are kept as written. Stamping changes only the `created` and `updated
 
 ### Claude Code setup
 
-Copy `integrations/claude-code/skills/apl/` into the repo's `.claude/skills/`. The skill teaches agents to look for earlier docs, create them with `apl new`, publish with `apl sync`, and write handoffs. Then add hooks to `.claude/settings.json`:
+This repo is also a Claude Code plugin marketplace. The `agent-plan` plugin (in `plugins/agent-plan/`) bundles a skill that teaches agents to look for earlier docs, create them with `apl new`, publish with `apl sync`, and write handoffs, plus two hooks:
+
+- **SessionStart** runs `apl pull` and shows the agent open handoffs. It also creates the `.apl` link in a fresh checkout.
+- **Stop** runs `apl sync --if-changed` after each turn, which publishes doc edits and skips the network when there are none. A conflict is reported rather than resolved.
+
+With these hooks, the git post-commit hook (`apl init --auto-commit`) isn't needed. If `apl` isn't installed, the Stop hook does nothing and the SessionStart hook tells the agent how to install it.
+
+To turn it on for everyone working in a repo, commit this to the repo's `.claude/settings.json`:
 
 ```json
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "apl pull --quiet; apl ls --type handoff --status open --short"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      { "hooks": [{ "type": "command", "command": "apl sync --if-changed >/dev/null" }] }
-    ]
-  }
+  "extraKnownMarketplaces": {
+    "agent-plan": {
+      "source": { "source": "github", "repo": "ghmeier/agent-plan" },
+      "autoUpdate": true
+    }
+  },
+  "enabledPlugins": { "agent-plan@agent-plan": true }
 }
 ```
 
-`SessionStart` brings in teammates' changes, creates the `.apl` link in a fresh checkout, and shows the agent open handoffs. `Stop` publishes the agent's doc edits after each turn. `--if-changed` makes turns without doc edits skip the network, and a conflict is reported to the user. With these hooks, the git post-commit hook (`apl init --auto-commit`) isn't needed. `apl` must be on `PATH` for both.
+Teammates are asked to install the marketplace the first time they trust the repo in Claude Code, and the plugin then updates itself. Each teammate still installs the CLI with `bun i -g @ghmeier/agent-plan@latest`.
+
+To try it without changing a repo's settings, run `/plugin marketplace add ghmeier/agent-plan` and then `/plugin install agent-plan@agent-plan` in Claude Code.
 
 ## Shell Completion
 

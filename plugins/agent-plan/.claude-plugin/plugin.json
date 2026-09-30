@@ -1,0 +1,7 @@
+{
+  "name": "agent-plan",
+  "description": "Teaches agents to find, write, publish, and hand off plans and research in .apl/, and keeps docs synced with teammates.",
+  "author": { "name": "Garret Meier" },
+  "homepage": "https://github.com/ghmeier/agent-plan",
+  "license": "MIT"
+}

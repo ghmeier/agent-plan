@@ -26,7 +26,7 @@ Releases are published to npm as `@ghmeier/agent-plan` by `.github/workflows/pub
 - `src/lib/frontmatter.ts`: YAML frontmatter parsing, and `setFrontmatterFields`, which edits only the lines for the keys it sets so everything else in a user's frontmatter survives. Never re-serialize a whole frontmatter block.
 - `src/lib/hooks.ts`: the optional post-commit auto-commit hook. It appends a marked section to an existing hook rather than overwriting it.
 - `src/lib/remote.ts`: fetch, rebase, and ahead/behind helpers shared by `sync`, `pull`, and `status`.
-- `integrations/claude-code/`: the skill teams copy into their repo to teach agents the tool. Update it when a command agents use changes.
+- `plugins/agent-plan/`: the Claude Code plugin (skill and hooks) that teams enable to teach agents the tool, listed by `.claude-plugin/marketplace.json`. Update the skill when a command agents use changes, and check it with `claude plugin validate .`. The plugin has no `version` on purpose, so every commit reaches users.
 - `src/commands/complete.ts` is the hidden backend for shell completion; `completion.ts` emits the bash/zsh/fish scripts that call it.
 
 ## Conventions

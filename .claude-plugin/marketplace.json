@@ -1,0 +1,12 @@
+{
+  "name": "agent-plan",
+  "description": "Claude Code plugin for the apl CLI",
+  "owner": { "name": "Garret Meier" },
+  "plugins": [
+    {
+      "name": "agent-plan",
+      "source": "./plugins/agent-plan",
+      "description": "Skill and hooks for storing plans, research, and handoffs with apl"
+    }
+  ]
+}
