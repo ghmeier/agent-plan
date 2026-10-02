@@ -21,9 +21,14 @@ export interface NewOptions {
   json?: boolean;
 }
 
-/** Validates a doc name like `billing/stripe-webhooks` and returns it with a `.md` extension. */
-function normalizeDocName(name: string): string {
-  const withExtension = name.endsWith(".md") ? name : `${name}.md`;
+/**
+ * Validates a doc name like `billing/stripe-webhooks` and returns it with a
+ * `.md` extension. A leading `<type>/` is dropped, because the type directory
+ * is added anyway and agents often include it.
+ */
+function normalizeDocName(name: string, typeName: string): string {
+  const withoutType = name.startsWith(`${typeName}/`) ? name.slice(typeName.length + 1) : name;
+  const withExtension = withoutType.endsWith(".md") ? withoutType : `${withoutType}.md`;
   const segments = withExtension.split("/");
   const invalid =
     path.posix.isAbsolute(withExtension) ||
@@ -35,6 +40,17 @@ function normalizeDocName(name: string): string {
     );
   }
   return withExtension;
+}
+
+/** Turns a file name like `2026-10-01-stripe-webhooks.md` into "Stripe webhooks". */
+function titleFromDocPath(docPath: string): string {
+  const words = path.posix
+    .basename(docPath, ".md")
+    .replace(/^\d{4}-\d{2}-\d{2}[-_]?/, "")
+    .replace(/[-_]+/g, " ")
+    .trim();
+  if (words === "") return path.posix.basename(docPath, ".md");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 async function currentBranch(repoRoot: string): Promise<string> {
@@ -53,7 +69,7 @@ export async function newDoc(typeName: string, name: string, options: NewOptions
   const storeDir = await ensureStore(repoRoot, config);
   const type = findType(await readDocTypes(storeDir), typeName);
 
-  const docPath = `${type.name}/${normalizeDocName(name)}`;
+  const docPath = `${type.name}/${normalizeDocName(name, type.name)}`;
   const destPath = path.join(storeDir, docPath);
   if (await Bun.file(destPath).exists()) {
     throw new FileExistsError(docPath);
@@ -61,7 +77,7 @@ export async function newDoc(typeName: string, name: string, options: NewOptions
 
   const template = await resolveTemplate(storeDir, type.name);
   let content = renderTemplate(template.text, {
-    title: options.title ?? path.posix.basename(docPath, ".md"),
+    title: options.title ?? titleFromDocPath(docPath),
     status: type.defaultStatus,
     type: type.name,
     name: docPath.slice(type.name.length + 1, -".md".length),
@@ -90,7 +106,7 @@ export function registerNew(program: Command): void {
   program
     .command("new <type> <name>")
     .description("Create a doc from its type's template and print its path")
-    .option("--title <title>", "Title for the doc (default: the file name)")
+    .option("--title <title>", "Title for the doc (default: from the file name)")
     .option(
       "--tag <tag>",
       "Tag to add (repeatable)",

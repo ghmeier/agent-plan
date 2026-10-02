@@ -53,7 +53,7 @@ apl init --branch docs --auto-commit
 
 ### `apl new <type> <name> [--title <title>] [--tag <tag>]... [--json]`
 
-Creates `.apl/<type>/<name>.md` from the type's template and prints its absolute path, so an agent can capture it and write to it. `<name>` may include directories, such as `billing/stripe-webhooks`. The doc starts at the type's default status. `new` doesn't commit; `commit`, `sync`, or the auto-commit hook record the doc once it has content. It fails if the file already exists.
+Creates `.apl/<type>/<name>.md` from the type's template and prints its absolute path, so an agent can capture it and write to it. `<name>` may include directories, such as `billing/stripe-webhooks`; a leading `<type>/` is dropped. Without `--title`, the title comes from the file name, minus any leading date: `2026-10-01-stripe-webhooks` becomes "Stripe webhooks". The doc starts at the type's default status. `new` doesn't commit; `commit`, `sync`, or the auto-commit hook record the doc once it has content. It fails if the file already exists.
 
 ```bash
 apl new research billing/stripe-webhooks --title "Stripe webhook retries" --tag billing
@@ -92,7 +92,7 @@ apl show plan.md --at HEAD~2
 
 ### `apl ls [path] [--json] [--short] [--type <type>] [--status <status>] [--tag <tag>]`
 
-Lists markdown files in `.apl/`, including uncommitted ones, optionally under a subdirectory, most recently updated first. The default output is a table showing filename, type, title, status, last update, and tags. Use `--short` for filename-only output. Use `--type`, `--status`, and `--tag` to filter results (filters combine with AND).
+Also available as `apl list`. Lists markdown files in `.apl/`, including uncommitted ones, optionally under a subdirectory, most recently updated first. The default output is a table showing filename, type, title, status, last update, and tags. Use `--short` for filename-only output. Use `--type`, `--status`, and `--tag` to filter results (filters combine with AND).
 
 ```bash
 apl ls
@@ -209,9 +209,9 @@ Other keys are kept as written. Stamping changes only the `created` and `updated
 
 ### Claude Code setup
 
-This repo is also a Claude Code plugin marketplace. The `agent-plan` plugin (in `plugins/agent-plan/`) bundles a skill that teaches agents to look for earlier docs, create them with `apl new`, publish with `apl sync`, and write handoffs, plus two hooks:
+This repo is also a Claude Code plugin marketplace. The `agent-plan` plugin (in `plugins/agent-plan/`) bundles a skill that teaches agents to look for earlier docs, create them with `apl new`, leave publishing to the Stop hook, and write handoffs, plus two hooks:
 
-- **SessionStart** runs `apl pull` and shows the agent open handoffs. It also creates the `.apl` link in a new worktree.
+- **SessionStart** runs `apl pull`, tells the agent to load the skill, and shows it open handoffs. It also creates the `.apl` link in a new worktree.
 - **Stop** runs `apl sync --if-changed` after each turn, which publishes doc edits and skips the network when there are none. A conflict is reported rather than resolved.
 
 Both hooks do nothing in a repo whose clone has no docs branch yet, so the plugin can be enabled for your user without affecting other repos. Run `apl init` once in a clone to turn them on there. With these hooks, the git post-commit hook (`apl init --auto-commit`) isn't needed. If `apl` isn't installed, the Stop hook does nothing and the SessionStart hook tells the agent how to install it.

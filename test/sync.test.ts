@@ -386,7 +386,7 @@ describe("apl hook", () => {
 
       const result = await apl(repo.dir, ["hook", "session-start"]);
 
-      expect(result.stdout).toBe(
+      expect(result.stdout).toEndWith(
         "Open handoffs in .apl/ (read one with `apl show <path>`):\n- handoff/search.md: Search ranking\n",
       );
     },
@@ -394,13 +394,15 @@ describe("apl hook", () => {
   );
 
   test(
-    "hook session-start prints nothing when there are no open handoffs",
+    "hook session-start points at the skill and lists no handoffs when none are open",
     async () => {
       await using repo = await createInitializedRepo();
 
       const result = await apl(repo.dir, ["hook", "session-start"]);
 
-      expect(result.stdout).toBe("");
+      expect(result.stdout).toBe(
+        "This repo keeps plans, research, and handoffs in .apl/. Load the agent-plan:apl skill before reading or writing them.\n",
+      );
     },
     REMOTE_TEST_TIMEOUT_MS,
   );

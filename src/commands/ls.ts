@@ -133,6 +133,7 @@ function printTable(entries: PlanEntry[]): void {
 export function registerLs(program: Command): void {
   program
     .command("ls [path]")
+    .alias("list")
     .description("List docs in .apl/")
     .option("--json", "Output in JSON format")
     .option("--short", "Filename-only output (one per line)")

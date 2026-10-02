@@ -75,7 +75,7 @@ describe("apl new", () => {
     expect(result.stdout).toBe(`${join(repo.storeDir, "research/billing/stripe-webhooks.md")}\n`);
     const doc = await showJson(repo, "research/billing/stripe-webhooks.md");
     expect(doc.type).toBe("research");
-    expect(doc.meta).toMatchObject({ title: "stripe-webhooks", status: "draft", tags: [] });
+    expect(doc.meta).toMatchObject({ title: "Stripe webhooks", status: "draft", tags: [] });
     expect(doc.body).toContain("## Findings");
     expect(await planLogMessages(repo)).toEqual(["Initialize docs"]);
   });
@@ -99,6 +99,42 @@ describe("apl new", () => {
     expect(doc.meta).toMatchObject({ title: "Auth: phase 2", tags: ["a", "b"] });
   });
 
+  test("new without --title titles the doc from its file name, minus a leading date", async () => {
+    await using repo = await createInitializedRepo();
+
+    await apl(repo.dir, ["new", "plan", "2026-10-01-stripe_webhook-retries"]);
+
+    const doc = await showJson(repo, "plan/2026-10-01-stripe_webhook-retries.md");
+    expect(doc.meta).toMatchObject({ title: "Stripe webhook retries" });
+  });
+
+  test("new keeps a file name that is only a date as the title", async () => {
+    await using repo = await createInitializedRepo();
+
+    await apl(repo.dir, ["new", "plan", "2026-10-01"]);
+
+    expect((await showJson(repo, "plan/2026-10-01.md")).meta).toMatchObject({
+      title: "2026-10-01",
+    });
+  });
+
+  test("new drops a leading type directory from the name", async () => {
+    await using repo = await createInitializedRepo();
+
+    const result = await apl(repo.dir, ["new", "plan", "plan/billing/retries"]);
+
+    expect(result.stdout).toBe(`${join(repo.storeDir, "plan/billing/retries.md")}\n`);
+    expect((await apl(repo.dir, ["ls", "--short"])).stdout).toBe("plan/billing/retries.md\n");
+  });
+
+  test("new keeps a leading directory named after a different type", async () => {
+    await using repo = await createInitializedRepo();
+
+    await apl(repo.dir, ["new", "plan", "research/retries"]);
+
+    expect((await apl(repo.dir, ["ls", "--short"])).stdout).toBe("plan/research/retries.md\n");
+  });
+
   test("new starts a doc at its type's default status", async () => {
     await using repo = await createInitializedRepo();
 
@@ -114,7 +150,7 @@ describe("apl new", () => {
 
     await apl(repo.dir, ["new", "plan", "search"]);
 
-    expect((await showJson(repo, "plan/search.md")).body).toBe("# plan: search\n");
+    expect((await showJson(repo, "plan/search.md")).body).toBe("# plan: Search\n");
     expect((await apl(repo.dir, ["ls", "--short"])).stdout).toBe("plan/search.md\n");
   });
 

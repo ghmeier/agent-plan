@@ -269,6 +269,15 @@ describe("apl ls", () => {
     expect(await lsShort(repo)).toEqual(["committed.md", "draft.md"]);
   });
 
+  test("list is an alias for ls", async () => {
+    await using repo = await createInitializedRepo();
+    await addPlan(repo, "auth.md", "# Auth\n");
+
+    const result = await apl(repo.dir, ["list", "--short"]);
+
+    expect(result).toMatchObject({ exitCode: 0, stdout: "auth.md\n" });
+  });
+
   test("ls with a path lists only files under that directory", async () => {
     await using repo = await createRepoWithTaggedPlans();
 

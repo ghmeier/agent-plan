@@ -21,13 +21,13 @@ Plans, research, and handoffs live in `.apl/`, a directory shared by every check
 apl new plan billing/stripe-retries --title "Stripe webhook retries" --tag billing
 ```
 
-`apl new <type> <area>/<slug>` creates the file from a template and prints its path. Then fill it in with your normal file tools. The built-in types are `plan`, `research`, and `handoff`; run `apl types` to see this team's types and their statuses. Name docs by the area of the code they cover.
+`apl new <type> <area>/<slug>` creates `.apl/<type>/<area>/<slug>.md` from a template and prints its path, so don't repeat the type in the name. Pass `--title`; without it the title comes from the file name. Then fill it in with your normal file tools. The built-in types are `plan`, `research`, and `handoff`; run `apl types` to see this team's types and their statuses. Name docs by the area of the code they cover.
 
 Edit existing docs in place with normal file tools. Keep `status` in the frontmatter current as work moves along (for example `draft`, then `active`, then `completed` for a plan). Don't edit the `created` and `updated` dates; apl sets them.
 
 ## Publish
 
-Run `apl sync` when a doc reaches a useful stopping point. It commits, rebases onto teammates' changes, and pushes. If a Stop hook already runs it, you don't need to.
+This plugin's Stop hook runs `apl sync` at the end of every turn, which commits doc edits, rebases onto teammates' changes, and pushes. Don't run `apl commit` or `apl sync` after each edit. Run `apl sync` yourself only when teammates need to see a doc before the turn ends.
 
 - Never run `git` inside `.apl/`, and never `git add` anything under `.apl` in the code repo.
 - If `apl sync` reports a conflict, stop and tell the user which files conflict. Don't try to resolve it, and never edit a file that contains `<<<<<<<` markers.
@@ -38,6 +38,6 @@ When stopping partway, or when the user asks for a handoff:
 
 1. `apl new handoff <area>/<slug>` and fill in each section, especially "Next steps" and "Gotchas". Link the plan it continues.
 2. Set the plan's `status` if it changed.
-3. `apl sync`, then give the user the handoff's path.
+3. Give the user the handoff's path. The Stop hook publishes it.
 
 To pick up a handoff, find it with `apl ls --type handoff --status open`, read it, and set its status to `picked-up`.

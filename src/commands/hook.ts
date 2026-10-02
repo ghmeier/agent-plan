@@ -23,9 +23,12 @@ async function docsEnabledHere(): Promise<boolean> {
 }
 
 /**
- * Brings in teammates' docs and prints the open handoffs, which Claude Code
- * adds to the session's context. A failed pull is reported in that output
- * rather than failing the hook, so the session still starts with the list.
+ * Brings in teammates' docs and prints a pointer to the plugin's skill and
+ * the open handoffs, which Claude Code adds to the session's context. Without
+ * the pointer, agents that see `.apl/` mentioned elsewhere learn the CLI from
+ * `--help` and miss the skill's conventions. A failed pull is reported in
+ * that output rather than failing the hook, so the session still starts with
+ * the list.
  */
 async function sessionStart(): Promise<void> {
   try {
@@ -34,6 +37,10 @@ async function sessionStart(): Promise<void> {
     const message = err instanceof AgentPlanError ? err.message : String(err);
     console.log(`apl could not pull teammates' doc changes: ${message}`);
   }
+
+  console.log(
+    "This repo keeps plans, research, and handoffs in .apl/. Load the agent-plan:apl skill before reading or writing them.",
+  );
 
   const repoRoot = await findRepoRoot();
   const storeDir = await ensureStore(repoRoot, await readConfig(repoRoot));
