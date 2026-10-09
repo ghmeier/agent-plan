@@ -3,6 +3,7 @@ import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { stampTimestamps } from "../lib/frontmatter";
 import { execGit, runGit, SKIP_CODE_HOOKS } from "../lib/git";
+import { withStoreLock } from "../lib/lock";
 import { info, success, warn } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 import { assertNoOperationInProgress, ensureStore } from "../lib/worktree";
@@ -119,6 +120,6 @@ export function registerCommit(program: Command): void {
     .description("Commit pending changes in .apl/")
     .option("-m, --message <msg>", "Commit message")
     .action(async (opts) => {
-      await commitPlans(opts);
+      await withStoreLock(await findRepoRoot(), () => commitPlans(opts));
     });
 }

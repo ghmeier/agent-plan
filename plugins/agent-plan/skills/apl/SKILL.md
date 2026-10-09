@@ -30,7 +30,7 @@ Edit existing docs in place with normal file tools. Keep `status` in the frontma
 This plugin's Stop hook runs `apl sync` at the end of every turn, which commits doc edits, rebases onto teammates' changes, and pushes. Don't run `apl commit` or `apl sync` after each edit. Run `apl sync` yourself only when teammates need to see a doc before the turn ends.
 
 - Never run `git` inside `.apl/`, and never `git add` anything under `.apl` in the code repo.
-- If `apl sync` reports a conflict, stop and tell the user which files conflict. Don't try to resolve it, and never edit a file that contains `<<<<<<<` markers.
+- If `apl sync` or the Stop hook reports a conflict, stop and tell the user which files conflict. Don't try to resolve it, and never edit a file that contains `<<<<<<<` markers.
 
 ## Hand off work
 

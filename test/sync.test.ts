@@ -421,6 +421,25 @@ describe("apl hook", () => {
     },
     REMOTE_TEST_TIMEOUT_MS,
   );
+
+  test(
+    "hook stop exits 2 with the conflict so the plugin wakes the agent",
+    async () => {
+      await using remote = await createRemote();
+      await using publisher = await createPublishingRepo(remote);
+      await using teammate = await createTeammateRepo(remote);
+      await Bun.write(join(publisher.storeDir, "shared.md"), "# Publisher's version\n");
+      await apl(publisher.dir, ["sync"]);
+      await Bun.write(join(teammate.storeDir, "shared.md"), "# Teammate's version\n");
+
+      const result = await apl(teammate.dir, ["hook", "stop"]);
+
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr).toContain("apl could not publish doc edits");
+      expect(result.stderr).toContain("conflict with origin/apl in: shared.md");
+    },
+    REMOTE_TEST_TIMEOUT_MS,
+  );
 });
 
 describe("overlapping syncs", () => {
@@ -454,6 +473,26 @@ describe("overlapping syncs", () => {
       expect(publishedWhileHeld.exitCode).not.toBe(0);
       expect(result.exitCode).toBe(0);
       expect(await git(remote.dir, ["show", "apl:draft.md"])).toBe("# Draft");
+    },
+    REMOTE_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "a commit waits while a sync holds the store",
+    async () => {
+      await using repo = await createInitializedRepo();
+      await Bun.write(join(repo.storeDir, "draft.md"), "# Draft\n");
+      const lockDir = await holdStoreLock(repo, process.pid);
+
+      const commit = apl(repo.dir, ["commit"]);
+      await Bun.sleep(1_000);
+      const committedWhileHeld = await planLogMessages(repo);
+      await rm(lockDir, { recursive: true });
+      const result = await commit;
+
+      expect(committedWhileHeld.join("\n")).not.toContain("draft.md");
+      expect(result.exitCode).toBe(0);
+      expect((await planLogMessages(repo)).join("\n")).toContain("draft.md");
     },
     REMOTE_TEST_TIMEOUT_MS,
   );

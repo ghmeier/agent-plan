@@ -56,6 +56,21 @@ async function sessionStart(): Promise<void> {
   }
 }
 
+/**
+ * Publishes doc edits made during the turn. The plugin runs this hook with
+ * `asyncRewake`, which drops a background hook's output unless it exits with
+ * code 2, so every failure exits 2 to reach the agent, which then tells the
+ * user about a conflict instead of leaving it unnoticed.
+ */
+async function stop(): Promise<void> {
+  try {
+    await syncPlans({ ifChanged: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new AgentPlanError(`apl could not publish doc edits: ${message}`, 2);
+  }
+}
+
 export function registerHook(program: Command): void {
   program
     .command("hook <event>", { hidden: true })
@@ -65,7 +80,7 @@ export function registerHook(program: Command): void {
       if (event === "session-start") {
         await sessionStart();
       } else if (event === "stop") {
-        await syncPlans({ ifChanged: true });
+        await stop();
       } else {
         throw new AgentPlanError(`Unknown hook event "${event}". Use session-start or stop.`);
       }

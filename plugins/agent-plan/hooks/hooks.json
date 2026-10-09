@@ -17,7 +17,8 @@
           {
             "type": "command",
             "command": "command -v apl >/dev/null 2>&1 || exit 0; apl hook stop >/dev/null",
-            "async": true
+            "async": true,
+            "asyncRewake": true
           }
         ]
       }

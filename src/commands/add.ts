@@ -6,6 +6,7 @@ import { findType, readDocTypes } from "../lib/doc-types";
 import { FileNotFoundError, NotInitializedError } from "../lib/errors";
 import { stampTimestamps } from "../lib/frontmatter";
 import { branchExists, execGit, runGit, SKIP_CODE_HOOKS } from "../lib/git";
+import { withStoreLock } from "../lib/lock";
 import { info, success } from "../lib/output";
 import { findRepoRoot, resolvePlanPath } from "../lib/paths";
 import { assertNoOperationInProgress, ensureStore } from "../lib/worktree";
@@ -93,6 +94,6 @@ export function registerAdd(program: Command): void {
     .option("-m, --message <msg>", "custom commit message")
     .option("--type <type>", "store the files under this doc type's directory")
     .action(async (file: string, files: string[], options: { message?: string; type?: string }) => {
-      await addPlans([file, ...files], options);
+      await withStoreLock(await findRepoRoot(), () => addPlans([file, ...files], options));
     });
 }
