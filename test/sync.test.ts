@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chmod, lstat } from "node:fs/promises";
+import { chmod, lstat, mkdir, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
   addOrigin,
@@ -11,6 +11,7 @@ import {
   git,
   planLogMessages,
   type Repo,
+  run,
   type TempDir,
 } from "./harness";
 
@@ -416,6 +417,59 @@ describe("apl hook", () => {
 
       await apl(repo.dir, ["hook", "stop"]);
 
+      expect(await git(remote.dir, ["show", "apl:draft.md"])).toBe("# Draft");
+    },
+    REMOTE_TEST_TIMEOUT_MS,
+  );
+});
+
+describe("overlapping syncs", () => {
+  /** Holds the store lock as if another apl process with `pid` were mid-sync. */
+  async function holdStoreLock(repo: Repo, pid: number): Promise<string> {
+    const gitCommonDir = await git(repo.dir, [
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-common-dir",
+    ]);
+    const lockDir = join(gitCommonDir, "agent-plan", "store.lock");
+    await mkdir(lockDir, { recursive: true });
+    await Bun.write(join(lockDir, "pid"), String(pid));
+    return lockDir;
+  }
+
+  test(
+    "a sync waits while another apl process holds the store, then publishes",
+    async () => {
+      await using remote = await createRemote();
+      await using repo = await createPublishingRepo(remote);
+      await Bun.write(join(repo.storeDir, "draft.md"), "# Draft\n");
+      const lockDir = await holdStoreLock(repo, process.pid);
+
+      const sync = apl(repo.dir, ["sync"]);
+      await Bun.sleep(1_000);
+      const publishedWhileHeld = await run(["git", "show", "apl:draft.md"], remote.dir);
+      await rm(lockDir, { recursive: true });
+      const result = await sync;
+
+      expect(publishedWhileHeld.exitCode).not.toBe(0);
+      expect(result.exitCode).toBe(0);
+      expect(await git(remote.dir, ["show", "apl:draft.md"])).toBe("# Draft");
+    },
+    REMOTE_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "a sync takes over a store lock left by an apl process that exited",
+    async () => {
+      await using remote = await createRemote();
+      await using repo = await createPublishingRepo(remote);
+      await Bun.write(join(repo.storeDir, "draft.md"), "# Draft\n");
+      const exited = await run(["sh", "-c", "echo $$"], repo.dir);
+      await holdStoreLock(repo, Number(exited.stdout.trim()));
+
+      const result = await apl(repo.dir, ["sync"]);
+
+      expect(result.exitCode).toBe(0);
       expect(await git(remote.dir, ["show", "apl:draft.md"])).toBe("# Draft");
     },
     REMOTE_TEST_TIMEOUT_MS,

@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { execGit } from "../lib/git";
+import { withStoreLock } from "../lib/lock";
 import { info, success } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 import { fetchDocsBranch, hasRemote, rebaseOntoRemote, upstreamRef } from "../lib/remote";
@@ -13,29 +14,31 @@ import { commitPlans } from "./commit";
  */
 export async function pullDocs(options: { quiet?: boolean } = {}): Promise<void> {
   const repoRoot = await findRepoRoot();
-  const config = await readConfig(repoRoot);
+  await withStoreLock(repoRoot, async () => {
+    const config = await readConfig(repoRoot);
 
-  // Sets up the store first, which in a fresh clone fetches the docs branch.
-  const storeDir = await ensureStore(repoRoot, config);
+    // Sets up the store first, which in a fresh clone fetches the docs branch.
+    const storeDir = await ensureStore(repoRoot, config);
 
-  if (!(await hasRemote(repoRoot, config))) {
-    if (!options.quiet) info("No remote configured, skipping pull");
-    return;
-  }
-  await commitPlans({ quiet: true });
+    if (!(await hasRemote(repoRoot, config))) {
+      if (!options.quiet) info("No remote configured, skipping pull");
+      return;
+    }
+    await commitPlans({ quiet: true });
 
-  const before = await execGit(["rev-parse", "HEAD"], storeDir);
-  if (await fetchDocsBranch(repoRoot, config)) {
-    await rebaseOntoRemote(storeDir, upstreamRef(config));
-  }
-  const after = await execGit(["rev-parse", "HEAD"], storeDir);
+    const before = await execGit(["rev-parse", "HEAD"], storeDir);
+    if (await fetchDocsBranch(repoRoot, config)) {
+      await rebaseOntoRemote(storeDir, upstreamRef(config));
+    }
+    const after = await execGit(["rev-parse", "HEAD"], storeDir);
 
-  if (options.quiet) return;
-  if (before === after) {
-    info(`Already up to date with ${config.remote}`);
-  } else {
-    success(`Pulled doc changes from ${config.remote}`);
-  }
+    if (options.quiet) return;
+    if (before === after) {
+      info(`Already up to date with ${config.remote}`);
+    } else {
+      success(`Pulled doc changes from ${config.remote}`);
+    }
+  });
 }
 
 export function registerPull(program: Command): void {

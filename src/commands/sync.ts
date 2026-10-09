@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { AgentPlanError } from "../lib/errors";
 import { runGit, SKIP_CODE_HOOKS } from "../lib/git";
+import { withStoreLock } from "../lib/lock";
 import { info, success } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 import {
@@ -27,42 +28,44 @@ export interface SyncOptions {
 export async function syncPlans(options: SyncOptions = {}): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
   const repoRoot = await findRepoRoot(cwd);
-  const config = await readConfig(repoRoot);
+  await withStoreLock(repoRoot, async () => {
+    const config = await readConfig(repoRoot);
 
-  // Sets up the store first, which in a fresh clone fetches the docs branch.
-  const storeDir = await ensureStore(repoRoot, config);
+    // Sets up the store first, which in a fresh clone fetches the docs branch.
+    const storeDir = await ensureStore(repoRoot, config);
 
-  if (!(await hasRemote(repoRoot, config))) {
-    if (!options.ifChanged) info("No remote configured, skipping sync");
-    return;
-  }
-  const upstream = upstreamRef(config);
+    if (!(await hasRemote(repoRoot, config))) {
+      if (!options.ifChanged) info("No remote configured, skipping sync");
+      return;
+    }
+    const upstream = upstreamRef(config);
 
-  // Commit any pending edits in .apl/ before syncing, so they travel with this push.
-  const committed = await commitPlans({ cwd, quiet: true });
+    // Commit any pending edits in .apl/ before syncing, so they travel with this push.
+    const committed = await commitPlans({ cwd, quiet: true });
 
-  if (options.ifChanged && !committed && (await aheadBehind(storeDir, upstream))?.ahead === 0) {
-    return;
-  }
+    if (options.ifChanged && !committed && (await aheadBehind(storeDir, upstream))?.ahead === 0) {
+      return;
+    }
 
-  if (await fetchDocsBranch(repoRoot, config)) {
-    await rebaseOntoRemote(storeDir, upstream);
-  }
+    if (await fetchDocsBranch(repoRoot, config)) {
+      await rebaseOntoRemote(storeDir, upstream);
+    }
 
-  const push = await runGit(
-    [
-      "push",
-      SKIP_CODE_HOOKS,
-      config.remote,
-      `refs/heads/${config.branch}:refs/heads/${config.branch}`,
-    ],
-    repoRoot,
-  );
-  if (push.exitCode !== 0) {
-    throw new AgentPlanError(`push failed: ${push.stderr.trim()}`);
-  }
+    const push = await runGit(
+      [
+        "push",
+        SKIP_CODE_HOOKS,
+        config.remote,
+        `refs/heads/${config.branch}:refs/heads/${config.branch}`,
+      ],
+      repoRoot,
+    );
+    if (push.exitCode !== 0) {
+      throw new AgentPlanError(`push failed: ${push.stderr.trim()}`);
+    }
 
-  success(`Synced docs with ${config.remote}`);
+    success(`Synced docs with ${config.remote}`);
+  });
 }
 
 export function registerSync(program: Command): void {

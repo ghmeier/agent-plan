@@ -1,5 +1,5 @@
 {
-  "description": "Pull teammates' docs and show open handoffs at session start; publish doc edits when a turn ends. Both do nothing in repos without an apl docs branch.",
+  "description": "Pull teammates' docs and show open handoffs at session start; publish doc edits in the background when a turn ends. Both do nothing in repos without an apl docs branch.",
   "hooks": {
     "SessionStart": [
       {
@@ -16,7 +16,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "command -v apl >/dev/null 2>&1 || exit 0; apl hook stop >/dev/null"
+            "command": "command -v apl >/dev/null 2>&1 || exit 0; apl hook stop >/dev/null",
+            "async": true
           }
         ]
       }
