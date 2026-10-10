@@ -31,134 +31,21 @@ AI coding workflows generate a steady stream of research docs, plans, and handof
 
 ## How It Works
 
-Docs live on an independent orphan branch (default: `apl`), checked out as a git worktree at `.apl` in the main checkout. Every other checkout (from `git worktree add`) gets a `.apl` symlink to it, and `.apl` is listed in `.git/info/exclude` so the code repo never sees it. The store stays out of `.git/` because Claude Code asks for approval before every write there, even through a symlink, and no permission rule can pre-approve it. A bare repo has no main checkout, so its store stays at `.git/agent-plan/worktree`. Agents and editors read and write files under `.apl/` with normal file I/O. `apl commit` stages and commits whatever changed. Because the branch is pushed to the same remote as your code, teammates get docs automatically on fetch, with no extra remote or auth setup.
+Files live on an independent orphan branch (default: `apl`), checked out as a git worktree at `.apl` in the main checkout. The plan folder is visible in every other checkout (from `git worktree add`) via a symlink to `.apl`. Agents and editors read and write files under `.apl/` with normal file I/O. `apl commit` stages and commits whatever changed. Because the branch is pushed to the same remote as your code, teammates get docs automatically.
 
-Because the worktree belongs to no single checkout, every checkout (from `git worktree add` or a tool like `wt`) shares the same files and commits to the same branch, and removing or moving any checkout leaves the docs intact. Any apl command creates the `.apl` link in a checkout that lacks one. If an agent already wrote files into a plain `.apl/` directory there, apl moves them into the store first.
+## Configuration
 
-## Commands
+### Document Types
 
-### `apl init [--branch <name>] [--auto-commit]`
+Documents can be automatically grouped into folders, filtered, and have custom statuses using document types. By default agent-plan has the following:
 
-Initializes doc storage in the current repo. Creates the docs branch if it doesn't exist (or builds on an existing remote branch to keep shared history), and sets up the `.apl/` worktree.
-
-Teammates don't need to run `init`: in a clone whose remote already has the docs branch, any command fetches it and sets up `.apl/` on first use.
-
-- `--branch <name>`: use a branch name other than `apl`
-- `--auto-commit`: install a post-commit hook that commits pending `.apl/` changes after every code commit. It goes wherever git reads hooks from, including `core.hooksPath`, and covers every checkout of the repo. It needs `apl` on `PATH`.
-
-```bash
-apl init
-apl init --branch docs --auto-commit
-```
-
-### `apl new <type> <name> [--title <title>] [--tag <tag>]... [--json]`
-
-Creates `.apl/<type>/<name>.md` from the type's template and prints its absolute path, so an agent can capture it and write to it. `<name>` may include directories, such as `billing/stripe-webhooks`; a leading `<type>/` is dropped. Without `--title`, the title comes from the file name, minus any leading date: `2026-10-01-stripe-webhooks` becomes "Stripe webhooks". The doc starts at the type's default status. `new` doesn't commit; `commit`, `sync`, or the auto-commit hook record the doc once it has content. It fails if the file already exists.
-
-```bash
-apl new research billing/stripe-webhooks --title "Stripe webhook retries" --tag billing
-apl new handoff auth-session-3 --json
-```
-
-### `apl add <file> [files...] [-m <message>] [--type <type>]`
-
-Copies one or more files into `.apl/` at their repo-relative path, stamps frontmatter timestamps, and commits. With `--type`, the path goes under that type's directory. A file already inside `.apl/` is committed in place. Files outside the repo are rejected.
-
-```bash
-apl add research.md plan.md -m "Add auth research and plan"
-apl add --type research docs/notes.md    # stored at research/docs/notes.md
-```
-
-### `apl commit [-m <message>]`
-
-Stages and commits all pending changes in `.apl/`. Stamps `updated` timestamps into any modified markdown files that have frontmatter. The default message names the changed files. Files over 1 MB are left uncommitted with a warning, so data an agent saves next to its notes isn't pushed to the shared remote; use `apl add` to commit one on purpose.
-
-apl's commits and pushes skip the code repo's git hooks (`--no-verify`), since hooks written for code, like pre-commit's, don't apply to the docs branch.
-
-```bash
-apl commit
-apl commit -m "Update plan after review"
-```
-
-### `apl show <path> [--at <ref>] [--json] [--raw]`
-
-Prints the contents of a doc. Reads from `.apl/<path>` directly, so uncommitted edits are visible. The `.md` extension is optional. Use `--at` to read a historical revision from git history.
-
-```bash
-apl show plan.md
-apl show plan.md --raw
-apl show plan.md --at HEAD~2
-```
-
-### `apl ls [path] [--json] [--short] [--type <type>] [--status <status>] [--tag <tag>]`
-
-Also available as `apl list`. Lists markdown files in `.apl/`, including uncommitted ones, optionally under a subdirectory, most recently updated first. The default output is a table showing filename, type, title, status, last update, and tags. Use `--short` for filename-only output. Use `--type`, `--status`, and `--tag` to filter results (filters combine with AND).
-
-```bash
-apl ls
-apl ls research/
-apl ls --short
-apl ls --status active
-apl ls --tag cli
-apl ls --status active --tag cli
-apl ls --type handoff --status open
-```
-
-### `apl types [--json]`
-
-Lists the doc types with their statuses, default status, and whether each template is built in or custom.
-
-### `apl log [file] [-n <limit>] [--json]`
-
-Shows commit history for all docs, or for a single file.
-
-```bash
-apl log
-apl log plan.md -n 5
-```
-
-### `apl diff [file] [--json]`
-
-Shows uncommitted changes in `.apl/` against HEAD, for all files or one, including new files that have never been committed.
-
-```bash
-apl diff
-apl diff plan.md
-```
-
-### `apl sync [--if-changed]`
-
-Commits any pending changes in `.apl/`, rebases them onto the remote branch, then pushes. If a teammate edited the same lines, sync aborts the rebase, names the conflicting files, and exits with an error without pushing; your local commits are left as they were. Skips gracefully if no remote is configured.
-
-`--if-changed` does nothing, not even a fetch, unless there are local changes to publish, which suits hooks that run often.
-
-`commit`, `add`, and `sync` refuse to run while a rebase or merge inside `.apl/` is unfinished, so conflict markers are never committed as plan content.
-
-```bash
-apl sync
-```
-
-### `apl pull [--quiet]`
-
-Brings in teammates' doc changes without pushing. Pending edits are committed locally first, then rebased onto the remote branch, the same way `sync` does it.
-
-### `apl status [--json]`
-
-Shows where the store is, how many commits this checkout is ahead of or behind the remote as of the last fetch (`apl pull` refreshes it), uncommitted files, and any unfinished rebase or merge. It also creates the `.apl` link in a checkout that doesn't have one yet.
-
-## Document Types
-
-A doc's type is its top-level directory: `.apl/research/billing/stripe.md` is a `research` doc. Docs outside a type directory, like `.apl/notes.md` or `.apl/archive/old.md`, have no type and work as before.
-
-With no configuration there are three types:
-
-| Type | Statuses (first is the default) |
+| Type | Statuses |
 | --- | --- |
 | `plan` | `draft`, `active`, `completed`, `archived` |
 | `research` | `draft`, `final`, `archived` |
 | `handoff` | `open`, `picked-up`, `closed` |
 
-To define your own, commit a `config.json` at the root of the docs branch. When it has a `types` key, that list replaces the built-ins, and because it lives on the branch every teammate gets the same set:
+Document types are configurable by creating `config.json` at the root of the docs branch (`.apl` by default). For example:
 
 ```json
 {
@@ -170,9 +57,7 @@ To define your own, commit a `config.json` at the root of the docs branch. When 
 }
 ```
 
-`statuses` defaults to `draft`, `active`, `completed`, `archived`, and `defaultStatus` defaults to the first status. Type names are lowercase letters, digits, and dashes.
-
-Templates for `apl new` come from `.apl/.templates/<type>.md` when that file exists, and otherwise from a built-in one. These placeholders are filled in: `{{title}}`, `{{status}}`, `{{type}}`, `{{name}}`, `{{date}}`, and `{{branch}}` (the current code branch). Files under dot-directories such as `.templates/` never appear in `ls` or completion.
+In addition to separating documents by folders, document types can also pull from different default templates used by `apl new`. Document type templates are located in `.apl/.templates/<type>.md`. Templates have the following placeholder variables automatically inserted: `{{title}}`, `{{status}}`, `{{type}}`, `{{name}}`, `{{date}}`, and `{{branch}}`.
 
 ## Frontmatter Metadata
 
@@ -193,30 +78,24 @@ updated: 2026-09-15
 Supported fields:
 
 - **title**: Short display name shown in `apl ls` output
-- **status**: One of the doc type's statuses (see Document Types). A status that isn't valid for the type is ignored with a warning, and the file is left unchanged.
+- **status**: One of the doc type's statuses (see Document Types).
 - **tags**: Array of free-form strings for categorization
 - **created**: ISO date, auto-set on first `apl add`
 - **updated**: ISO date, auto-set on every `apl add` and `apl commit`
 
-Other keys are kept as written. Stamping changes only the `created` and `updated` lines, so comments, key order, and formatting are left alone. Timestamps are only injected into files that already have a frontmatter block.
-
-## Agent Integration
+## Agent Usage
 
 - **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit. `apl new` prints the path to write to.
-- **Structured output**: `show`, `ls`, `log`, `diff`, `status`, `types`, and `new` support `--json`, and output is uncolored when it isn't going to a terminal.
-- **Finding docs**: `.apl` is git-ignored (and a symlink outside the main checkout), so ripgrep-based search tools skip it unless given the path explicitly (for example Grep with `path: ".apl"`).
-- **Editing from other checkouts**: in a checkout made with `git worktree add`, `.apl` links to the main checkout, which is outside that session's working directory. Claude Code asks before writing there unless an allow rule such as `Edit(//path/to/main-checkout/.apl/**)` matches, or the main checkout's `.apl` is added with `/add-dir` or `additionalDirectories`.
+- **Structured output**: `show`, `ls`, `log`, `diff`, `status`, `types`, and `new` support `--json`.
 
 ### Claude Code setup
 
-This repo is also a Claude Code plugin marketplace. The `agent-plan` plugin (in `plugins/agent-plan/`) bundles a skill that teaches agents to look for earlier docs, create them with `apl new`, leave publishing to the Stop hook, and write handoffs, plus two hooks:
+Integrate `agent-plan` automatically into Claude code using the provided plugin. The plugin includes a skill explaining usage as well as two hooks:
 
 - **SessionStart** runs `apl pull`, tells the agent to load the skill, and shows it open handoffs. It also creates the `.apl` link in a new worktree.
-- **Stop** runs `apl sync --if-changed` in the background after each turn, so the next turn doesn't wait on the network. It publishes doc edits and skips the network when there are none. A conflict or failed push is reported to the agent on its own, even after the turn ends, rather than resolved. Syncs and pulls take a lock on the docs store, so a sync still running when the next turn ends, or one from another session in the same repo, finishes before the next one starts.
+- **Stop** runs `apl sync --if-changed` in the background after each turn.
 
-Both hooks do nothing in a repo whose clone has no docs branch yet, so the plugin can be enabled for your user without affecting other repos. Run `apl init` once in a clone to turn them on there. With these hooks, the git post-commit hook (`apl init --auto-commit`) isn't needed. If `apl` isn't installed, the Stop hook does nothing and the SessionStart hook tells the agent how to install it.
-
-To turn it on for everyone working in a repo, commit this to the repo's `.claude/settings.json`:
+Install the plugin by adding it to `.claude/settings.json`:
 
 ```json
 {
@@ -230,19 +109,17 @@ To turn it on for everyone working in a repo, commit this to the repo's `.claude
 }
 ```
 
-Teammates are asked to install the marketplace the first time they trust the repo in Claude Code, and the plugin then updates itself. Each teammate still installs the CLI with `bun i -g @ghmeier/agent-plan@latest`.
-
-To use it yourself without changing a repo's settings, install it for your user:
+Or manually using the claude CLI:
 
 ```bash
 claude plugin marketplace add ghmeier/agent-plan
 claude plugin install agent-plan@agent-plan
 ```
 
+
 ## Shell Completion
 
-Tab completion is available for bash, zsh, and fish. It completes subcommands and
-flags, and asks the CLI for plan file names, tags, statuses, and commit hashes.
+Tab completion is available for bash, zsh, and fish:
 
 ```bash
 # Add it to your shell config automatically
@@ -295,12 +172,3 @@ To cross-compile binaries for macOS (arm64, x64) and Linux (x64) in one step:
 ```bash
 bun run build:all      # writes dist/apl-darwin-arm64, dist/apl-darwin-x64, dist/apl-linux-x64
 ```
-
-## Releasing
-
-```bash
-bun pm version patch   # or minor / major: bumps package.json, commits, and tags vX.Y.Z
-git push --follow-tags
-```
-
-Pushing the tag runs `.github/workflows/publish.yml`, which checks the tag matches `package.json`, then typechecks, lints, tests, and publishes to npm. The workflow needs an npm automation token in the repo's `NPM_TOKEN` secret.
