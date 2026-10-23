@@ -1,6 +1,6 @@
 ---
 title: "Agent ergonomics: search, compact ls, show sections"
-status: active
+status: completed
 tags: [cli, ux]
 created: 2026-10-23
 updated: 2026-10-23
@@ -69,7 +69,7 @@ Update the skill: for a long doc, run `apl show --outline` first, then `--sectio
 - [x] PR 3: compact `ls` output when stdout isn't a terminal, plus `ls --limit`. Record the before and after sizes.
 - [x] PR 4: `show --outline` and `--section`, with tests and README and skill updates
 
-All four are implemented in one uncommitted working tree on `main`, not yet split into PRs.
+All four were merged into local `main` with `wt merge`, one commit each: a4d0a3b (skill), f92456c (search), 5f58e9d (compact ls), 5e4db08 (show sections). They have not been pushed.
 
 ### Implementation notes
 
