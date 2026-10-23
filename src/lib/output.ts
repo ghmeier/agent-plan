@@ -31,3 +31,8 @@ export function warn(msg: string): void {
 export function info(msg: string): void {
   console.log(`${colors.dim("ℹ")} ${msg}`);
 }
+
+/** Like `info`, but on stderr, for notes that shouldn't mix into output a caller parses. */
+export function hint(msg: string): void {
+  console.error(`${colors.dim("ℹ")} ${msg}`);
+}

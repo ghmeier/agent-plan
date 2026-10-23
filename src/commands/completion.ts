@@ -20,7 +20,7 @@ _apl_completions() {
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
   fi
 
-  local subcommands="init new add commit sync pull status log show ls diff types completion"
+  local subcommands="init new add commit sync pull status log show ls search diff types completion"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=($(compgen -W "$subcommands" -- "$cur"))
@@ -61,6 +61,19 @@ _apl_completions() {
         --tag)    COMPREPLY=($(compgen -W "$(apl __complete tags 2>/dev/null)" -- "$cur")) ;;
         --type)   COMPREPLY=($(compgen -W "$(apl __complete types 2>/dev/null)" -- "$cur")) ;;
         *)        COMPREPLY=($(compgen -W "--json --short --type --status --tag" -- "$cur")) ;;
+      esac
+      ;;
+    search)
+      case "$prev" in
+        --status) COMPREPLY=($(compgen -W "$(apl __complete statuses 2>/dev/null)" -- "$cur")) ;;
+        --tag)    COMPREPLY=($(compgen -W "$(apl __complete tags 2>/dev/null)" -- "$cur")) ;;
+        --type)   COMPREPLY=($(compgen -W "$(apl __complete types 2>/dev/null)" -- "$cur")) ;;
+        --path|--limit) ;;
+        *)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--json --type --status --tag --path --limit" -- "$cur"))
+          fi
+          ;;
       esac
       ;;
     new)
@@ -139,6 +152,7 @@ _apl() {
         'log:Show commit history'
         'show:Show a doc'
         'ls:List docs'
+        'search:Find docs by keyword'
         'diff:Show uncommitted changes'
         'types:List doc types'
         'completion:Print shell completion script'
@@ -172,6 +186,16 @@ _apl() {
             '--type[Filter by doc type]:type:($(apl __complete types 2>/dev/null))' \\
             '--status[Filter by status]:status:($(apl __complete statuses 2>/dev/null))' \\
             '--tag[Filter by tag]:tag:($(apl __complete tags 2>/dev/null))'
+          ;;
+        search)
+          _arguments \\
+            '--json[Output in JSON format]' \\
+            '--type[Filter by doc type]:type:($(apl __complete types 2>/dev/null))' \\
+            '--status[Filter by status]:status:($(apl __complete statuses 2>/dev/null))' \\
+            '--tag[Filter by tag]:tag:($(apl __complete tags 2>/dev/null))' \\
+            '--path[Only search under this directory]:dir:()' \\
+            '--limit[Show at most this many docs]:number:()' \\
+            '*:term:()'
           ;;
         new)
           _arguments \\
@@ -236,6 +260,7 @@ complete -c apl -n '__fish_use_subcommand' -a status     -d 'Show uncommitted do
 complete -c apl -n '__fish_use_subcommand' -a log        -d 'Show commit history'
 complete -c apl -n '__fish_use_subcommand' -a show       -d 'Show a doc'
 complete -c apl -n '__fish_use_subcommand' -a ls         -d 'List docs'
+complete -c apl -n '__fish_use_subcommand' -a search     -d 'Find docs by keyword'
 complete -c apl -n '__fish_use_subcommand' -a diff       -d 'Show uncommitted changes'
 complete -c apl -n '__fish_use_subcommand' -a types      -d 'List doc types'
 complete -c apl -n '__fish_use_subcommand' -a completion -d 'Print shell completion script'
@@ -255,17 +280,19 @@ complete -c apl -n '__fish_seen_subcommand_from log' -a '(apl __complete files 2
 complete -c apl -n '__fish_seen_subcommand_from diff' -l json -d 'Output in JSON format'
 complete -c apl -n '__fish_seen_subcommand_from diff' -a '(apl __complete files 2>/dev/null)'
 
-# ls
-complete -c apl -n '__fish_seen_subcommand_from ls' -l json   -d 'Output in JSON format'
+# ls / search
 complete -c apl -n '__fish_seen_subcommand_from ls' -l short  -d 'Filename-only output'
-complete -c apl -n '__fish_seen_subcommand_from ls' -l status -d 'Filter by status'
-complete -c apl -n '__fish_seen_subcommand_from ls' -l tag    -d 'Filter by tag'
-complete -c apl -n '__fish_seen_subcommand_from ls' -l type   -d 'Filter by doc type'
-complete -c apl -n '__fish_seen_subcommand_from ls' -n '__fish_prev_arg_in --type' \\
+complete -c apl -n '__fish_seen_subcommand_from search' -l path -r -d 'Only search under this directory'
+complete -c apl -n '__fish_seen_subcommand_from search' -l limit -r -d 'Show at most this many docs'
+complete -c apl -n '__fish_seen_subcommand_from ls search' -l json   -d 'Output in JSON format'
+complete -c apl -n '__fish_seen_subcommand_from ls search' -l status -d 'Filter by status'
+complete -c apl -n '__fish_seen_subcommand_from ls search' -l tag    -d 'Filter by tag'
+complete -c apl -n '__fish_seen_subcommand_from ls search' -l type   -d 'Filter by doc type'
+complete -c apl -n '__fish_seen_subcommand_from ls search' -n '__fish_prev_arg_in --type' \\
   -a '(apl __complete types 2>/dev/null)'
-complete -c apl -n '__fish_seen_subcommand_from ls' -n '__fish_prev_arg_in --status' \\
+complete -c apl -n '__fish_seen_subcommand_from ls search' -n '__fish_prev_arg_in --status' \\
   -a '(apl __complete statuses 2>/dev/null)'
-complete -c apl -n '__fish_seen_subcommand_from ls' -n '__fish_prev_arg_in --tag' \\
+complete -c apl -n '__fish_seen_subcommand_from ls search' -n '__fish_prev_arg_in --tag' \\
   -a '(apl __complete tags 2>/dev/null)'
 
 # new

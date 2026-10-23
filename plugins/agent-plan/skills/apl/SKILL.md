@@ -11,9 +11,10 @@ Plans, research, and handoffs live in `.apl/`, a directory shared by every check
 
 `.apl` is git-ignored (and a symlink outside the main checkout), so Grep and Glob skip it unless you point them at it. Before writing a new doc, look for existing ones:
 
-- `apl ls --json` lists docs newest first with type, title, status, and tags. Narrow it with `--type plan`, `--status active`, or `--tag billing`.
-- Search content with Grep and `path: ".apl"`.
-- `apl show <path>` prints a doc, and `apl status` shows uncommitted docs and whether teammates have pushed changes since the last pull.
+- `apl search <keywords>` finds docs that contain every keyword in their path, title, tags, or body, and prints up to 2 matching lines from each with their line numbers. Narrow it with `--type plan`, `--status active`, or `--tag billing`.
+- `apl ls` lists docs newest first with type, title, status, and tags, and takes the same filters.
+- `apl show <path>` prints a doc.
+- `apl status` shows uncommitted docs and whether teammates have pushed changes since the last pull.
 
 ## Create a doc
 

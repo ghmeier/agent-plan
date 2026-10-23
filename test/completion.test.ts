@@ -230,6 +230,7 @@ describe.skipIf(!HAS_BASH)("bash completion", () => {
         "log",
         "show",
         "ls",
+        "search",
         "diff",
         "types",
         "completion",
@@ -239,6 +240,10 @@ describe.skipIf(!HAS_BASH)("bash completion", () => {
     { line: ["apl", "show", ""], expected: ["alpha.md", "beta.md"] },
     { line: ["apl", "show", "--"], expected: ["--at", "--raw", "--json"] },
     { line: ["apl", "ls", "--"], expected: ["--json", "--short", "--type", "--status", "--tag"] },
+    {
+      line: ["apl", "search", "billing", "--"],
+      expected: ["--json", "--type", "--status", "--tag", "--path", "--limit"],
+    },
     {
       line: ["apl", "ls", "--status", ""],
       expected: [

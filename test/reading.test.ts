@@ -307,6 +307,148 @@ describe("apl ls", () => {
   });
 });
 
+async function searchFiles(repo: Repo, args: readonly string[]): Promise<string[]> {
+  const result = await apl(repo.dir, ["search", "--json", ...args]);
+  return (JSON.parse(result.stdout).files as { file: string }[]).map((entry) => entry.file);
+}
+
+describe("apl search", () => {
+  test("search returns only docs that contain every term", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.storeDir, "both.md"), "# Stripe\nRetry failed webhooks.\n");
+    await Bun.write(join(repo.storeDir, "one.md"), "# Stripe\nRefunds only.\n");
+
+    expect(await searchFiles(repo, ["stripe", "retry"])).toEqual(["both.md"]);
+  });
+
+  test("search matches case-insensitively in the path, title, and tags", async () => {
+    await using repo = await createRepoWithTaggedPlans();
+
+    expect(await searchFiles(repo, ["ARCHIVE"])).toEqual(["archive/old.md"]);
+    expect(await searchFiles(repo, ["bug fix"])).toEqual(["bug.md"]);
+    expect(await searchFiles(repo, ["ux"])).toEqual(["cli.md"]);
+  });
+
+  test("search ignores frontmatter keys that aren't the title or tags", async () => {
+    await using repo = await createRepoWithTaggedPlans();
+
+    expect(await searchFiles(repo, ["draft"])).toEqual([]);
+  });
+
+  test("search ranks a title match above a newer doc that matches only in the body", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(
+      join(repo.storeDir, "body.md"),
+      "---\ntitle: Payments\nupdated: 2026-03-01\n---\nWe retry webhooks.\n",
+    );
+    await Bun.write(
+      join(repo.storeDir, "title.md"),
+      "---\ntitle: Webhook retries\nupdated: 2026-01-01\n---\nDetails.\n",
+    );
+
+    expect(await searchFiles(repo, ["webhook"])).toEqual(["title.md", "body.md"]);
+  });
+
+  test("search prints each doc's matching lines with their line numbers in the file", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(
+      join(repo.storeDir, "plan.md"),
+      "---\ntitle: Plan\n---\n# Plan\n\nRetry webhooks.\nUnrelated.\nRetry refunds.\nRetry payouts.\n",
+    );
+
+    const result = await apl(repo.dir, ["search", "retry"]);
+
+    expect(result.stdout).toContain("\n  L6: Retry webhooks.\n  L8: Retry refunds.\n");
+  });
+
+  test("search prefers lines that contain more of the terms", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(
+      join(repo.storeDir, "plan.md"),
+      "Stripe setup.\nStripe keys.\nStripe webhook retries.\n",
+    );
+
+    const result = await apl(repo.dir, ["search", "stripe", "retries", "--json"]);
+
+    expect(JSON.parse(result.stdout).files[0].matches).toEqual([
+      { line: 1, text: "Stripe setup." },
+      { line: 3, text: "Stripe webhook retries." },
+    ]);
+  });
+
+  test("search cuts a long matching line down to the text around the match", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(
+      join(repo.storeDir, "plan.md"),
+      `${"a".repeat(300)} needle ${"b".repeat(300)}\n`,
+    );
+
+    const result = await apl(repo.dir, ["search", "needle", "--json"]);
+
+    const [match] = JSON.parse(result.stdout).files[0].matches;
+    expect(match.text).toContain("needle");
+    expect(match.text.length).toBeLessThanOrEqual(162);
+  });
+
+  test("search --limit cuts off results and reports the total", async () => {
+    await using repo = await createInitializedRepo();
+    for (const name of ["a.md", "b.md", "c.md"]) {
+      await Bun.write(join(repo.storeDir, name), "Billing notes.\n");
+    }
+
+    const table = await apl(repo.dir, ["search", "billing", "--limit", "2"]);
+    const json = JSON.parse(
+      (await apl(repo.dir, ["search", "billing", "--limit", "2", "--json"])).stdout,
+    );
+
+    expect(table.stderr).toContain("Showing 2 of 3 matching docs");
+    expect(json.files).toHaveLength(2);
+    expect(json.total).toBe(3);
+  });
+
+  test("search --json returns each doc's metadata and matches", async () => {
+    await using repo = await createRepoWithTaggedPlans();
+
+    const result = await apl(repo.dir, ["search", "cli plan", "--json"]);
+
+    expect(JSON.parse(result.stdout)).toEqual({
+      files: [
+        {
+          file: "cli.md",
+          type: null,
+          meta: {
+            title: "CLI Tool",
+            status: "active",
+            tags: ["cli", "ux"],
+            created: "2026-01-01",
+            updated: expect.any(String),
+          },
+          matches: [{ line: 10, text: "# CLI plan" }],
+        },
+      ],
+      total: 1,
+    });
+  });
+
+  test.each([
+    { filter: ["--path", "archive"], expected: ["archive/old.md"] },
+    { filter: ["--tag", "ux"], expected: ["cli.md"] },
+    { filter: ["--status", "archived"], expected: ["archive/old.md"] },
+  ])("search plan $filter matches $expected", async ({ filter, expected }) => {
+    await using repo = await createRepoWithTaggedPlans();
+
+    expect(await searchFiles(repo, ["plan", ...filter])).toEqual([...expected]);
+  });
+
+  test("search reports when no docs match and exits 0", async () => {
+    await using repo = await createRepoWithTaggedPlans();
+
+    const result = await apl(repo.dir, ["search", "nonexistent"]);
+
+    expect(result).toMatchObject({ exitCode: 0, stdout: "ℹ No docs match\n" });
+  });
+});
+
 describe("apl log", () => {
   test("log prints short hash, date, and message for each commit, newest first", async () => {
     await using repo = await createInitializedRepo();

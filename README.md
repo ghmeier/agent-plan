@@ -104,6 +104,16 @@ apl ls --status active --tag cli
 apl ls --type handoff --status open
 ```
 
+### `apl search <terms...> [--json] [--type <type>] [--status <status>] [--tag <tag>] [--path <dir>] [--limit <n>]`
+
+Finds docs that contain every term, case-insensitively, somewhere in their path, title, tags, or body. Docs whose path, title, or tags contain every term come first, and within each group the most recently updated come first. Each doc's row is followed by up to 2 matching body lines, prefixed with their line number in the file. Results stop at 20 unless `--limit` says otherwise, with a note on stderr giving the total. `--json` returns `{ files: [{ file, type, meta, matches: [{ line, text }] }], total }`. Takes the same filters as `ls`, with `--path` limiting the search to a directory.
+
+```bash
+apl search stripe retries
+apl search billing --type plan --status active
+apl search auth --path research/ --json
+```
+
 ### `apl types [--json]`
 
 Lists the doc types with their statuses, default status, and whether each template is built in or custom.
@@ -203,8 +213,8 @@ Other keys are kept as written. Stamping changes only the `created` and `updated
 ## Agent Integration
 
 - **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit. `apl new` prints the path to write to.
-- **Structured output**: `show`, `ls`, `log`, `diff`, `status`, `types`, and `new` support `--json`, and output is uncolored when it isn't going to a terminal.
-- **Finding docs**: `.apl` is git-ignored (and a symlink outside the main checkout), so ripgrep-based search tools skip it unless given the path explicitly (for example Grep with `path: ".apl"`).
+- **Structured output**: `show`, `ls`, `search`, `log`, `diff`, `status`, `types`, and `new` support `--json`, and output is uncolored when it isn't going to a terminal.
+- **Finding docs**: `apl search <keywords>` searches every doc. `.apl` is git-ignored (and a symlink outside the main checkout), so ripgrep-based search tools skip it unless given the path explicitly (for example Grep with `path: ".apl"`).
 - **Editing from other checkouts**: in a checkout made with `git worktree add`, `.apl` links to the main checkout, which is outside that session's working directory. Claude Code asks before writing there unless an allow rule such as `Edit(//path/to/main-checkout/.apl/**)` matches, or the main checkout's `.apl` is added with `/add-dir` or `additionalDirectories`.
 
 ### Claude Code setup

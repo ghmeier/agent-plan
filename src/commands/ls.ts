@@ -2,8 +2,9 @@ import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { findType, readDocTypes, typeOf, withValidStatus } from "../lib/doc-types";
+import { AgentPlanError } from "../lib/errors";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
-import { colors, info } from "../lib/output";
+import { colors, hint, info } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 import { listMarkdownFiles } from "../lib/plan-files";
 import { ensureStore } from "../lib/worktree";
@@ -20,9 +21,11 @@ export interface PlanEntry {
   file: string;
   type: string | null;
   meta: PlanMeta;
+  /** The whole file as stored, frontmatter included. */
+  content: string;
 }
 
-function lastUpdated(entry: PlanEntry): string | undefined {
+export function lastUpdated(entry: PlanEntry): string | undefined {
   return entry.meta.updated ?? entry.meta.created;
 }
 
@@ -51,9 +54,9 @@ export async function findDocs(storeDir: string, filters: DocFilters = {}): Prom
   const entries: PlanEntry[] = await Promise.all(
     allFiles.map(async (file) => {
       const type = typeOf(file, types);
-      const raw = await Bun.file(join(storeDir, file)).text();
-      const meta = withValidStatus(parseFrontmatter(raw).meta, type, file);
-      return { file, type: type?.name ?? null, meta };
+      const content = await Bun.file(join(storeDir, file)).text();
+      const meta = withValidStatus(parseFrontmatter(content).meta, type, file);
+      return { file, type: type?.name ?? null, meta, content };
     }),
   );
 
@@ -99,11 +102,22 @@ export async function listPlans(
     return files;
   }
 
-  printTable(filtered);
+  printDocTable(filtered);
   return files;
 }
 
-function printTable(entries: PlanEntry[]): void {
+/** Tells a reader that output was cut off, on stderr so piped results stay clean. */
+export function warnIfLimited(shown: number, total: number): void {
+  if (shown < total) {
+    hint(`Showing ${shown} of ${total} matching docs. Pass --limit ${total} to see them all.`);
+  }
+}
+
+/** Prints an aligned table with one row per doc, with any detail lines for a row printed beneath it. */
+export function printDocTable<T extends PlanEntry>(
+  entries: T[],
+  detailLines: (entry: T) => string[] = () => [],
+): void {
   const headers = ["FILE", "TYPE", "TITLE", "STATUS", "UPDATED", "TAGS"];
 
   const rows = entries.map((e) => [
@@ -116,18 +130,22 @@ function printTable(entries: PlanEntry[]): void {
   ]);
 
   const widths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]?.length ?? 0)));
+  const pad = (s: string, i: number) => s.padEnd(widths[i] ?? s.length);
 
-  function pad(s: string, w: number): string {
-    return s.padEnd(w);
+  console.log(headers.map((h, i) => colors.bold(pad(h, i))).join("  "));
+  rows.forEach((row, i) => {
+    console.log(row.map(pad).join("  ").trimEnd());
+    for (const line of detailLines(entries[i] as T)) console.log(colors.dim(line));
+  });
+}
+
+/** Parses a `--limit` value, which must be a positive whole number. */
+export function parseLimit(value: string): number {
+  const limit = Number(value);
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new AgentPlanError(`--limit must be a positive whole number, got "${value}".`);
   }
-
-  const headerLine = headers.map((h, i) => colors.bold(pad(h, widths[i] ?? h.length))).join("  ");
-  console.log(headerLine);
-
-  for (const row of rows) {
-    const line = row.map((cell, i) => pad(cell, widths[i] ?? cell.length)).join("  ");
-    console.log(line);
-  }
+  return limit;
 }
 
 export function registerLs(program: Command): void {
