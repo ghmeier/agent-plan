@@ -23,7 +23,7 @@ apl new plan billing/stripe-retries --title "Stripe webhook retries" --tag billi
 
 `apl new <type> <area>/<slug>` creates `.apl/<type>/<area>/<slug>.md` from a template and prints its path, so don't repeat the type in the name. Pass `--title`; without it the title comes from the file name. Then fill it in with your normal file tools. The built-in types are `plan`, `research`, and `handoff`; run `apl types` to see this team's types and their statuses. Name docs by the area of the code they cover.
 
-Edit existing docs in place with normal file tools. Keep `status` in the frontmatter current as work moves along (for example `draft`, then `active`, then `completed` for a plan). Don't edit the `created` and `updated` dates; apl sets them.
+Edit existing docs in place with normal file tools. Keep `status` in the frontmatter current as work moves along. Teams can define their own types and statuses, so pick a status that `apl types` lists for the doc's type rather than assuming one. With the built-in types, a plan goes `draft`, then `active`, then `completed` or `archived`. Don't edit the `created` and `updated` dates; apl sets them.
 
 ## Publish
 
@@ -39,5 +39,7 @@ When stopping partway, or when the user asks for a handoff:
 1. `apl new handoff <area>/<slug>` and fill in each section, especially "Next steps" and "Gotchas". Link the plan it continues.
 2. Set the plan's `status` if it changed.
 3. Give the user the handoff's path. The Stop hook publishes it.
+
+A handoff written as a final summary, with nothing left for anyone to pick up, should be set to `closed` right away. Otherwise it stays `open`, and the session-start hook lists it in every session.
 
 To pick up a handoff, find it with `apl ls --type handoff --status open`, read it, and set its status to `picked-up`.
