@@ -1,6 +1,6 @@
 ---
 title: "Agent ergonomics: search, compact ls, show sections"
-status: draft
+status: active
 tags: [cli, ux]
 created: 2026-10-23
 updated: 2026-10-23
@@ -64,10 +64,21 @@ Update the skill: for a long doc, run `apl show --outline` first, then `--sectio
 
 ## Steps
 
-- [ ] PR 1: skill status example and handoff `closed` guidance
-- [ ] PR 2: `apl search`, with tests in `test/reading.test.ts` and README, completion, and skill updates
-- [ ] PR 3: compact `ls` output when stdout isn't a terminal, plus `ls --limit`. Record the before and after sizes.
-- [ ] PR 4: `show --outline` and `--section`, with tests and README and skill updates
+- [x] PR 1: skill status example and handoff `closed` guidance
+- [x] PR 2: `apl search`, with tests in `test/reading.test.ts` and README, completion, and skill updates
+- [x] PR 3: compact `ls` output when stdout isn't a terminal, plus `ls --limit`. Record the before and after sizes.
+- [x] PR 4: `show --outline` and `--section`, with tests and README and skill updates
+
+All four are implemented in one uncommitted working tree on `main`, not yet split into PRs.
+
+### Implementation notes
+
+- **Status example.** The evidence above has the built-ins backwards. apl's built-in plan statuses are `draft, active, completed, archived` (`DEFAULT_STATUSES` in `src/lib/doc-types.ts`); `active, merged, done, abandoned` is gazebo's custom plan type. The skill's example was right for the built-ins and wrong for gazebo. The skill now tells agents to pick a status from `apl types`, and gives the built-in flow only as an example.
+- **`ls` size in gazebo** (277 docs, measured from source): 70,626 bytes padded, 33,065 bytes tab-separated. `--json` is 55,734 bytes and unchanged.
+- **Search scope.** `search <terms...>` is variadic, so it takes no positional path; `--path <dir>` is the only scope option. Frontmatter keys other than `title` and `tags` are not searched, so `search active` doesn't match every doc whose status is `active`. Among a doc's matching lines, the two with the most distinct terms are shown, in file order. A long line is cut to 160 characters around its first match, since plans are often one paragraph per line.
+- **Section matching on short text** shows up quickly: `--section PR` also matches "Approach".
+- **Untested:** the aligned table for terminal output. The harness pipes stdout and can't fake a TTY.
+- **Test timeouts.** Under load, `test/completion.test.ts` times out at bun's 5-second default, on a clean tree too. `bun test --timeout 20000` passes.
 
 Tests follow `CLAUDE.md`: end-to-end through `apl(cwd, args)`, each test builds its own repo, and they're grouped by workflow (`reading`). Cover each new flag with a positive and a negative case. For example: search requires every term, a body-only match ranks below a title match, `--section` stops at the next heading of the same level, a `#` inside a code fence isn't a heading, and an unknown section lists the doc's headings. Tests run with stdout piped, so they exercise the compact `ls` path. Check that the aligned table still exists for terminal output only if the harness can fake a TTY; otherwise leave that path untested and say so in the PR. Run `bun test`, `bun run typecheck`, and `bun run lint` before each PR.
 
