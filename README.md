@@ -90,9 +90,9 @@ apl show plan.md --raw
 apl show plan.md --at HEAD~2
 ```
 
-### `apl ls [path] [--json] [--short] [--type <type>] [--status <status>] [--tag <tag>]`
+### `apl ls [path] [--json] [--short] [--type <type>] [--status <status>] [--tag <tag>] [--limit <n>]`
 
-Also available as `apl list`. Lists markdown files in `.apl/`, including uncommitted ones, optionally under a subdirectory, most recently updated first. The default output is a table showing filename, type, title, status, last update, and tags. Use `--short` for filename-only output. Use `--type`, `--status`, and `--tag` to filter results (filters combine with AND).
+Also available as `apl list`. Lists markdown files in `.apl/`, including uncommitted ones, optionally under a subdirectory, most recently updated first. The default output is a table showing filename, type, title, status, last update, and tags: aligned in a terminal, and tab-separated with a header row when piped. Use `--short` for filename-only output. Use `--type`, `--status`, and `--tag` to filter results (filters combine with AND). `--limit` shows only the first `n` docs and notes on stderr how many matched.
 
 ```bash
 apl ls

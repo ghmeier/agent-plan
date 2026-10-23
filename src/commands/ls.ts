@@ -11,6 +11,7 @@ import { ensureStore } from "../lib/worktree";
 
 export interface LsOptions {
   json?: boolean;
+  limit?: number;
   short?: boolean;
   status?: string;
   tag?: string;
@@ -76,7 +77,9 @@ export async function listPlans(
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
   const storeDir = await ensureStore(repoRoot, config);
-  const filtered = await findDocs(storeDir, { ...options, path });
+  const matching = await findDocs(storeDir, { ...options, path });
+  const filtered = matching.slice(0, options.limit);
+  if (!options.json) warnIfLimited(filtered.length, matching.length);
 
   const files = filtered.map((e) => e.file);
 
@@ -113,7 +116,12 @@ export function warnIfLimited(shown: number, total: number): void {
   }
 }
 
-/** Prints an aligned table with one row per doc, with any detail lines for a row printed beneath it. */
+/**
+ * Prints one row per doc, with any detail lines for a row printed beneath it.
+ * A terminal gets an aligned table. Anything else, usually an agent or a
+ * script, gets tab-separated rows, because padding every column to its longest
+ * value made the output twice as large without making it easier to parse.
+ */
 export function printDocTable<T extends PlanEntry>(
   entries: T[],
   detailLines: (entry: T) => string[] = () => [],
@@ -128,6 +136,15 @@ export function printDocTable<T extends PlanEntry>(
     lastUpdated(e) ?? "",
     e.meta.tags?.join(", ") ?? "",
   ]);
+
+  if (process.stdout.isTTY !== true) {
+    console.log(headers.join("\t"));
+    rows.forEach((row, i) => {
+      console.log(row.join("\t"));
+      for (const line of detailLines(entries[i] as T)) console.log(line);
+    });
+    return;
+  }
 
   const widths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]?.length ?? 0)));
   const pad = (s: string, i: number) => s.padEnd(widths[i] ?? s.length);
@@ -158,6 +175,7 @@ export function registerLs(program: Command): void {
     .option("--type <type>", "Filter by doc type (see 'apl types')")
     .option("--status <status>", "Filter by status")
     .option("--tag <tag>", "Filter by tag")
+    .option("--limit <n>", "Show at most this many docs", parseLimit)
     .action(async (path: string | undefined, options: LsOptions) => {
       await listPlans(path, undefined, options);
     });

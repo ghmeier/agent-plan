@@ -239,7 +239,10 @@ describe.skipIf(!HAS_BASH)("bash completion", () => {
     { line: ["apl", "sh"], expected: ["show"] },
     { line: ["apl", "show", ""], expected: ["alpha.md", "beta.md"] },
     { line: ["apl", "show", "--"], expected: ["--at", "--raw", "--json"] },
-    { line: ["apl", "ls", "--"], expected: ["--json", "--short", "--type", "--status", "--tag"] },
+    {
+      line: ["apl", "ls", "--"],
+      expected: ["--json", "--short", "--type", "--status", "--tag", "--limit"],
+    },
     {
       line: ["apl", "search", "billing", "--"],
       expected: ["--json", "--type", "--status", "--tag", "--path", "--limit"],

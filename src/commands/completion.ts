@@ -60,7 +60,8 @@ _apl_completions() {
         --status) COMPREPLY=($(compgen -W "$(apl __complete statuses 2>/dev/null)" -- "$cur")) ;;
         --tag)    COMPREPLY=($(compgen -W "$(apl __complete tags 2>/dev/null)" -- "$cur")) ;;
         --type)   COMPREPLY=($(compgen -W "$(apl __complete types 2>/dev/null)" -- "$cur")) ;;
-        *)        COMPREPLY=($(compgen -W "--json --short --type --status --tag" -- "$cur")) ;;
+        --limit)  ;;
+        *)        COMPREPLY=($(compgen -W "--json --short --type --status --tag --limit" -- "$cur")) ;;
       esac
       ;;
     search)
@@ -185,7 +186,8 @@ _apl() {
             '--short[Filename-only output]' \\
             '--type[Filter by doc type]:type:($(apl __complete types 2>/dev/null))' \\
             '--status[Filter by status]:status:($(apl __complete statuses 2>/dev/null))' \\
-            '--tag[Filter by tag]:tag:($(apl __complete tags 2>/dev/null))'
+            '--tag[Filter by tag]:tag:($(apl __complete tags 2>/dev/null))' \\
+            '--limit[Show at most this many docs]:number:()'
           ;;
         search)
           _arguments \\
@@ -283,11 +285,11 @@ complete -c apl -n '__fish_seen_subcommand_from diff' -a '(apl __complete files 
 # ls / search
 complete -c apl -n '__fish_seen_subcommand_from ls' -l short  -d 'Filename-only output'
 complete -c apl -n '__fish_seen_subcommand_from search' -l path -r -d 'Only search under this directory'
-complete -c apl -n '__fish_seen_subcommand_from search' -l limit -r -d 'Show at most this many docs'
 complete -c apl -n '__fish_seen_subcommand_from ls search' -l json   -d 'Output in JSON format'
 complete -c apl -n '__fish_seen_subcommand_from ls search' -l status -d 'Filter by status'
 complete -c apl -n '__fish_seen_subcommand_from ls search' -l tag    -d 'Filter by tag'
 complete -c apl -n '__fish_seen_subcommand_from ls search' -l type   -d 'Filter by doc type'
+complete -c apl -n '__fish_seen_subcommand_from ls search' -l limit -r -d 'Show at most this many docs'
 complete -c apl -n '__fish_seen_subcommand_from ls search' -n '__fish_prev_arg_in --type' \\
   -a '(apl __complete types 2>/dev/null)'
 complete -c apl -n '__fish_seen_subcommand_from ls search' -n '__fish_prev_arg_in --status' \\

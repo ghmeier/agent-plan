@@ -223,18 +223,22 @@ describe("apl show", () => {
 });
 
 describe("apl ls", () => {
-  test("ls prints a table of file, title, status, and tags", async () => {
+  test("ls prints tab-separated rows of file, type, title, status, and tags when piped", async () => {
     await using repo = await createRepoWithTaggedPlans();
 
     const result = await apl(repo.dir, ["ls"]);
 
-    const lines = result.stdout.trimEnd().split("\n");
     const today = new Date().toISOString().slice(0, 10);
-    expect(lines[0]).toMatch(/^FILE\s+TYPE\s+TITLE\s+STATUS\s+UPDATED\s+TAGS\s*$/);
-    expect(lines.slice(1).map((line) => line.split(/\s{2,}/).filter(Boolean))).toEqual([
-      ["archive/old.md", "Old Plan", "archived", today, "cli"],
-      ["bug.md", "Bug Fix", "draft", today, "bug"],
-      ["cli.md", "CLI Tool", "active", today, "cli, ux"],
+    expect(
+      result.stdout
+        .trimEnd()
+        .split("\n")
+        .map((line) => line.split("\t")),
+    ).toEqual([
+      ["FILE", "TYPE", "TITLE", "STATUS", "UPDATED", "TAGS"],
+      ["archive/old.md", "", "Old Plan", "archived", today, "cli"],
+      ["bug.md", "", "Bug Fix", "draft", today, "bug"],
+      ["cli.md", "", "CLI Tool", "active", today, "cli, ux"],
     ]);
   });
 
@@ -304,6 +308,29 @@ describe("apl ls", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("No files found");
+  });
+
+  test("ls --limit lists only the most recent docs and says how many matched", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.storeDir, "older.md"), "---\nupdated: 2026-01-01\n---\n");
+    await Bun.write(join(repo.storeDir, "newer.md"), "---\nupdated: 2026-03-01\n---\n");
+
+    const limited = await apl(repo.dir, ["ls", "--short", "--limit", "1"]);
+    const unlimited = await apl(repo.dir, ["ls", "--short"]);
+
+    expect(limited.stdout).toBe("newer.md\n");
+    expect(limited.stderr).toContain("Showing 1 of 2 matching docs");
+    expect(unlimited.stdout).toBe("newer.md\nolder.md\n");
+    expect(unlimited.stderr).toBe("");
+  });
+
+  test("ls --limit rejects a value that isn't a positive whole number", async () => {
+    await using repo = await createInitializedRepo();
+
+    const result = await apl(repo.dir, ["ls", "--limit", "0"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('--limit must be a positive whole number, got "0"');
   });
 });
 
