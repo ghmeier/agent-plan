@@ -80,14 +80,18 @@ apl commit
 apl commit -m "Update plan after review"
 ```
 
-### `apl show <path> [--at <ref>] [--json] [--raw]`
+### `apl show <path> [--at <ref>] [--json] [--raw] [--outline | --section <heading>]`
 
 Prints the contents of a doc. Reads from `.apl/<path>` directly, so uncommitted edits are visible. The `.md` extension is optional. Use `--at` to read a historical revision from git history.
+
+For long docs, `--outline` lists the markdown headings with their line numbers in the file, and `--section <heading>` prints only the sections whose heading contains that text (case-insensitive). A section runs from its heading to the next heading at the same or a higher level, and every matching section is printed. `#` lines inside fenced code blocks aren't headings. Both keep the metadata header unless `--raw` is given, and with `--json` they return `{ path, headings }` or `{ path, sections }`. An unknown section fails with a list of the doc's headings.
 
 ```bash
 apl show plan.md
 apl show plan.md --raw
 apl show plan.md --at HEAD~2
+apl show plan.md --outline
+apl show plan.md --section "Risks"
 ```
 
 ### `apl ls [path] [--json] [--short] [--type <type>] [--status <status>] [--tag <tag>] [--limit <n>]`
@@ -214,7 +218,7 @@ Other keys are kept as written. Stamping changes only the `created` and `updated
 
 - **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit. `apl new` prints the path to write to.
 - **Structured output**: `show`, `ls`, `search`, `log`, `diff`, `status`, `types`, and `new` support `--json`, and output is uncolored when it isn't going to a terminal.
-- **Finding docs**: `apl search <keywords>` searches every doc. `.apl` is git-ignored (and a symlink outside the main checkout), so ripgrep-based search tools skip it unless given the path explicitly (for example Grep with `path: ".apl"`).
+- **Finding docs**: `apl search <keywords>` searches every doc, and `apl show --outline` then `--section` reads part of a long one. `.apl` is git-ignored (and a symlink outside the main checkout), so ripgrep-based search tools skip it unless given the path explicitly (for example Grep with `path: ".apl"`).
 - **Editing from other checkouts**: in a checkout made with `git worktree add`, `.apl` links to the main checkout, which is outside that session's working directory. Claude Code asks before writing there unless an allow rule such as `Edit(//path/to/main-checkout/.apl/**)` matches, or the main checkout's `.apl` is added with `/add-dir` or `additionalDirectories`.
 
 ### Claude Code setup

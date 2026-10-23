@@ -32,9 +32,10 @@ _apl_completions() {
     show)
       case "$prev" in
         --at) COMPREPLY=($(compgen -W "$(apl __complete versions 2>/dev/null)" -- "$cur")) ;;
+        --section) ;;
         *)
           if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--at --raw --json" -- "$cur"))
+            COMPREPLY=($(compgen -W "--at --raw --json --outline --section" -- "$cur"))
           else
             COMPREPLY=($(compgen -W "$(apl __complete files "$cur" 2>/dev/null)" -- "$cur"))
           fi
@@ -167,6 +168,8 @@ _apl() {
             '--at[Show the file as of a commit ref]:ref:($(apl __complete versions 2>/dev/null))' \\
             '--raw[Print file as-is without metadata header]' \\
             '--json[Output in JSON format]' \\
+            '--outline[List headings with line numbers]' \\
+            '--section[Print only matching sections]:heading:()' \\
             ':doc:($(apl __complete files 2>/dev/null))'
           ;;
         log)
@@ -271,6 +274,8 @@ complete -c apl -n '__fish_use_subcommand' -a completion -d 'Print shell complet
 complete -c apl -n '__fish_seen_subcommand_from show' -l at -r -d 'Show the file as of a commit ref'
 complete -c apl -n '__fish_seen_subcommand_from show' -l raw     -d 'Print as-is without metadata header'
 complete -c apl -n '__fish_seen_subcommand_from show' -l json    -d 'Output in JSON format'
+complete -c apl -n '__fish_seen_subcommand_from show' -l outline -d 'List headings with line numbers'
+complete -c apl -n '__fish_seen_subcommand_from show' -l section -r -d 'Print only matching sections'
 complete -c apl -n '__fish_seen_subcommand_from show' -a '(apl __complete files 2>/dev/null)'
 
 # log

@@ -222,6 +222,120 @@ describe("apl show", () => {
   });
 });
 
+const LONG_PLAN = `---
+title: Long plan
+status: active
+---
+# Long plan
+
+## Design
+
+\`\`\`bash
+# not a heading
+\`\`\`
+
+### PR 1
+
+First PR.
+
+### PR 2
+
+Second PR.
+
+## Risks
+
+Some risk.
+`;
+
+describe("apl show --outline and --section", () => {
+  test("outline lists headings with their line numbers and skips code fences", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.storeDir, "plan.md"), LONG_PLAN);
+
+    const result = await apl(repo.dir, ["show", "plan.md", "--outline", "--raw"]);
+
+    expect(result.stdout).toBe(
+      "L5  # Long plan\nL7    ## Design\nL13      ### PR 1\nL17      ### PR 2\nL21    ## Risks\n",
+    );
+  });
+
+  test("outline --json returns each heading's line, level, and text", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.storeDir, "plan.md"), "# Title\n\n## Goal\n");
+
+    const result = await apl(repo.dir, ["show", "plan.md", "--outline", "--json"]);
+
+    expect(JSON.parse(result.stdout)).toEqual({
+      path: "plan.md",
+      headings: [
+        { line: 1, level: 1, text: "Title" },
+        { line: 3, level: 2, text: "Goal" },
+      ],
+    });
+  });
+
+  test("section runs from its heading to the next heading at the same level", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.storeDir, "plan.md"), LONG_PLAN);
+
+    const result = await apl(repo.dir, ["show", "plan.md", "--section", "design", "--raw"]);
+
+    expect(result.stdout).toStartWith("## Design\n");
+    expect(result.stdout).toContain("Second PR.");
+    expect(result.stdout).not.toContain("Risks");
+  });
+
+  test("section prints every section whose heading matches", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.storeDir, "plan.md"), LONG_PLAN);
+
+    const result = await apl(repo.dir, ["show", "plan.md", "--section", "PR", "--raw"]);
+
+    expect(result.stdout).toBe("### PR 1\n\nFirst PR.\n\n### PR 2\n\nSecond PR.\n");
+  });
+
+  test("section keeps the metadata header unless --raw is given", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.storeDir, "plan.md"), LONG_PLAN);
+
+    const result = await apl(repo.dir, ["show", "plan.md", "--section", "risks"]);
+
+    expect(result.stdout).toContain("Title:   Long plan");
+    expect(result.stdout).toEndWith("## Risks\n\nSome risk.\n");
+  });
+
+  test("section reads an earlier revision with --at", async () => {
+    await using repo = await createInitializedRepo();
+    await addPlan(repo, "plan.md", "## Goal\n\nOld goal.\n");
+    await addPlan(repo, "plan.md", "## Goal\n\nNew goal.\n");
+
+    const result = await apl(repo.dir, ["show", "plan.md", "--section", "goal", "--at", "HEAD~1"]);
+
+    expect(result.stdout).toBe("## Goal\n\nOld goal.\n");
+  });
+
+  test("section fails for an unknown heading and lists the doc's headings", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.storeDir, "plan.md"), LONG_PLAN);
+
+    const result = await apl(repo.dir, ["show", "plan.md", "--section", "rollout"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('No heading in plan.md contains "rollout"');
+    expect(result.stderr).toContain("L21    ## Risks");
+  });
+
+  test("outline and section can't be combined", async () => {
+    await using repo = await createInitializedRepo();
+    await Bun.write(join(repo.storeDir, "plan.md"), LONG_PLAN);
+
+    const result = await apl(repo.dir, ["show", "plan.md", "--outline", "--section", "PR"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Pass --outline or --section, not both.");
+  });
+});
+
 describe("apl ls", () => {
   test("ls prints tab-separated rows of file, type, title, status, and tags when piped", async () => {
     await using repo = await createRepoWithTaggedPlans();

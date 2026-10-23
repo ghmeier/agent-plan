@@ -6,6 +6,7 @@ import { readDocTypes, typeOf, withValidStatus } from "../lib/doc-types";
 import { AgentPlanError, FileNotFoundError } from "../lib/errors";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
 import { runGit } from "../lib/git";
+import { findHeadings, findSections, type Heading, type Section } from "../lib/headings";
 import { colors } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 import { ensureStore } from "../lib/worktree";
@@ -40,11 +41,40 @@ async function readFromWorktree(storeDir: string, planPath: string): Promise<str
   throw new FileNotFoundError(planPath);
 }
 
+export interface ShowOptions {
+  at?: string;
+  json?: boolean;
+  outline?: boolean;
+  raw?: boolean;
+  section?: string;
+}
+
+function formatOutline(headings: Heading[]): string {
+  return headings
+    .map((h) => `L${h.line}  ${"  ".repeat(h.level - 1)}${"#".repeat(h.level)} ${h.text}`)
+    .join("\n");
+}
+
+/** Sections whose heading contains `query`, or an error listing the headings there are. */
+function matchingSections(planPath: string, content: string, query: string): Section[] {
+  const sections = findSections(content, query);
+  if (sections.length > 0) return sections;
+
+  const headings = findHeadings(content);
+  const available =
+    headings.length > 0 ? `Its headings are:\n${formatOutline(headings)}` : "It has no headings.";
+  throw new AgentPlanError(`No heading in ${planPath} contains "${query}". ${available}`);
+}
+
 export async function showPlan(
   planPath: string,
-  options: { at?: string; json?: boolean; raw?: boolean },
+  options: ShowOptions,
   cwd?: string,
 ): Promise<string> {
+  if (options.outline && options.section !== undefined) {
+    throw new AgentPlanError("Pass --outline or --section, not both.");
+  }
+
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
 
@@ -54,7 +84,7 @@ export async function showPlan(
     ? await readFromHistory(storeDir, options.at, planPath)
     : await readFromWorktree(storeDir, planPath);
 
-  if (options.raw) {
+  if (options.raw && !options.outline && options.section === undefined) {
     process.stdout.write(content);
     return content;
   }
@@ -63,6 +93,28 @@ export async function showPlan(
   const parsed = parseFrontmatter(content);
   const meta = withValidStatus(parsed.meta, type, planPath);
   const body = parsed.content;
+
+  if (options.outline) {
+    const headings = findHeadings(content);
+    if (options.json) {
+      console.log(JSON.stringify({ path: planPath, headings }));
+      return content;
+    }
+    if (!options.raw) printMetaHeader(meta, type?.name);
+    if (headings.length > 0) console.log(formatOutline(headings));
+    return content;
+  }
+
+  if (options.section !== undefined) {
+    const sections = matchingSections(planPath, content, options.section);
+    if (options.json) {
+      console.log(JSON.stringify({ path: planPath, sections }));
+      return content;
+    }
+    if (!options.raw) printMetaHeader(meta, type?.name);
+    process.stdout.write(sections.map((section) => section.content).join("\n"));
+    return content;
+  }
 
   if (options.json) {
     console.log(JSON.stringify({ path: planPath, type: type?.name ?? null, content, meta, body }));
@@ -103,7 +155,9 @@ export function registerShow(program: Command): void {
     .option("--at <ref>", "Show the file as of a commit ref")
     .option("--json", "Output in JSON format")
     .option("--raw", "Print the file as-is, without the metadata header")
-    .action(async (planPath: string, options: { at?: string; json?: boolean; raw?: boolean }) => {
+    .option("--outline", "List the doc's headings with their line numbers")
+    .option("--section <heading>", "Print only the sections whose heading contains this text")
+    .action(async (planPath: string, options: ShowOptions) => {
       await showPlan(planPath, options);
     });
 }

@@ -13,7 +13,7 @@ Plans, research, and handoffs live in `.apl/`, a directory shared by every check
 
 - `apl search <keywords>` finds docs that contain every keyword in their path, title, tags, or body, and prints up to 2 matching lines from each with their line numbers. Narrow it with `--type plan`, `--status active`, or `--tag billing`.
 - `apl ls` lists docs newest first with type, title, status, and tags, and takes the same filters.
-- `apl show <path>` prints a doc.
+- `apl show <path>` prints a doc. For a long doc, run `apl show <path> --outline` to list its headings, then `apl show <path> --section "<heading>"` to print only the part you need.
 - `apl status` shows uncommitted docs and whether teammates have pushed changes since the last pull.
 
 ## Create a doc
