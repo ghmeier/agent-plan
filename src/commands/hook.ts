@@ -24,7 +24,7 @@ async function docsEnabledHere(): Promise<boolean> {
 
 /**
  * Brings in teammates' docs and prints a pointer to the plugin's skill and
- * the open handoffs, which Claude Code adds to the session's context. Without
+ * the open handoffs, which Claude Code and Codex add to the session's context. Without
  * the pointer, agents that see `.apl/` mentioned elsewhere learn the CLI from
  * `--help` and miss the skill's conventions. A failed pull is reported in
  * that output rather than failing the hook, so the session still starts with
@@ -57,10 +57,12 @@ async function sessionStart(): Promise<void> {
 }
 
 /**
- * Publishes doc edits made during the turn. The plugin runs this hook with
- * `asyncRewake`, which drops a background hook's output unless it exits with
- * code 2, so every failure exits 2 to reach the agent, which then tells the
- * user about a conflict instead of leaving it unnoticed.
+ * Publishes doc edits made during the turn. The Claude Code plugin runs this
+ * hook with `asyncRewake`, which drops a background hook's output unless it
+ * exits with code 2, so every failure exits 2 to reach the agent, which then
+ * tells the user about a conflict instead of leaving it unnoticed. Codex has
+ * no equivalent for background hooks, so there a conflict surfaces at the
+ * next session start, when the pull fails.
  */
 async function stop(): Promise<void> {
   try {
@@ -74,7 +76,7 @@ async function stop(): Promise<void> {
 export function registerHook(program: Command): void {
   program
     .command("hook <event>", { hidden: true })
-    .description("Run the Claude Code plugin's hook for an event (session-start or stop)")
+    .description("Run the agent plugin's hook for an event (session-start or stop)")
     .action(async (event: string) => {
       if (!(await docsEnabledHere())) return;
       if (event === "session-start") {

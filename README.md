@@ -117,6 +117,17 @@ claude plugin marketplace add ghmeier/agent-plan
 claude plugin install agent-plan@agent-plan
 ```
 
+### Codex setup
+
+The same plugin works in Codex, with the same skill and hooks. Add the marketplace and install the plugin:
+
+```bash
+codex plugin marketplace add ghmeier/agent-plan
+codex plugin add agent-plan@agent-plan
+```
+
+Codex skips plugin hooks until you trust them, so run `/hooks` in a Codex session and trust the two agent-plan hooks. Codex can't wake the agent from a background hook, so if publishing doc edits after a turn hits a conflict, it shows up at the next session start instead of right away. Run `codex plugin marketplace upgrade` to pick up plugin updates.
+
 
 ## Shell Completion
 

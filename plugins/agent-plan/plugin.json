@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "agent-plan",
+  "description": "Teaches agents to find, write, publish, and hand off plans and research in .apl/, and keeps docs synced with teammates.",
+  "author": { "name": "Garret Meier" },
+  "homepage": "https://github.com/ghmeier/agent-plan",
+  "repository": "https://github.com/ghmeier/agent-plan",
+  "license": "MIT",
+  "extensions": {
+    "com.openai": {
+      "hooks": "./hooks/codex-hooks.json",
+      "interface": {
+        "displayName": "agent-plan",
+        "shortDescription": "Store plans, research, and handoffs on a separate git branch with apl",
+        "developerName": "Garret Meier",
+        "category": "Productivity",
+        "websiteURL": "https://github.com/ghmeier/agent-plan"
+      }
+    }
+  }
+}
