@@ -1,9 +1,11 @@
+import path from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { readDocTypes } from "../lib/doc-types";
 import { AgentPlanError } from "../lib/errors";
 import { branchExists } from "../lib/git";
-import { findRepoRoot } from "../lib/paths";
+import { linkOnTouch, storeRelativePath } from "../lib/links";
+import { findRepoRoot, getStoreDir } from "../lib/paths";
 import { ensureStore } from "../lib/worktree";
 import { findDocs } from "./ls";
 import { pullDocs } from "./pull";
@@ -73,18 +75,50 @@ async function stop(): Promise<void> {
   }
 }
 
+/**
+ * Links a doc to the branch of the checkout the agent works in when the agent
+ * reads or edits it. The plugin runs this as a PostToolUse hook, where a
+ * failure would disturb the agent, so it never throws or prints. The branch
+ * comes from `cwd`, not from the file path: a subagent in its own worktree can
+ * address a doc through the main checkout's `.apl`.
+ */
+async function docTouched(): Promise<void> {
+  try {
+    const input = JSON.parse(await Bun.stdin.text()) as {
+      cwd?: unknown;
+      tool_input?: { file_path?: unknown };
+    };
+    const filePath = input.tool_input?.file_path;
+    if (typeof input.cwd !== "string" || typeof filePath !== "string") return;
+
+    const repoRoot = await findRepoRoot(input.cwd);
+    const config = await readConfig(repoRoot);
+    const doc = await storeRelativePath(
+      await getStoreDir(repoRoot),
+      path.resolve(input.cwd, filePath),
+    );
+    if (doc) await linkOnTouch(repoRoot, config, doc);
+  } catch {
+    // Best-effort: the hook must stay silent and exit 0 whatever happens.
+  }
+}
+
 export function registerHook(program: Command): void {
   program
     .command("hook <event>", { hidden: true })
-    .description("Run the agent plugin's hook for an event (session-start or stop)")
+    .description("Run the agent plugin's hook for an event (session-start, stop, or doc-touched)")
     .action(async (event: string) => {
       if (!(await docsEnabledHere())) return;
       if (event === "session-start") {
         await sessionStart();
       } else if (event === "stop") {
         await stop();
+      } else if (event === "doc-touched") {
+        await docTouched();
       } else {
-        throw new AgentPlanError(`Unknown hook event "${event}". Use session-start or stop.`);
+        throw new AgentPlanError(
+          `Unknown hook event "${event}". Use session-start, stop, or doc-touched.`,
+        );
       }
     });
 }
