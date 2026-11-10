@@ -282,7 +282,7 @@ describe.skipIf(!HAS_BASH)("bash completion", () => {
     { line: ["apl", "ls", "--tag", ""], expected: ["backend", "cli", "docs"] },
     { line: ["apl", "link", ""], expected: ["alpha.md", "beta.md"] },
     { line: ["apl", "unlink", "--"], expected: ["--branch"] },
-    { line: ["apl", "links", "--"], expected: ["--branch", "--edits", "--json"] },
+    { line: ["apl", "links", "--"], expected: ["--branch", "--edits", "--resolve", "--json"] },
     { line: ["apl", "links", ""], expected: ["alpha.md", "beta.md"] },
     { line: ["apl", "log", "--"], expected: ["--links", "--json"] },
   ])("completes $line", async ({ line, expected }) => {

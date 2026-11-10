@@ -21,7 +21,7 @@ Plans, research, and handoffs live in `.apl/`, a directory shared by every check
 Reading or editing a doc from a work branch links the doc to that branch automatically, so there is nothing to maintain. Read plans with `apl show`, which always attributes the read to the right branch.
 
 - `apl show --branch` prints every doc linked to the branch you are on. Start there when you pick up work on a branch. `apl ls --branch <name>` lists them without printing them.
-- `apl links` lists every link. `apl links <doc>` lists the branches that implement a doc, and `apl links --branch` lists the docs a branch is for.
+- `apl links` lists every link. `apl links <doc>` lists the branches that implement a doc, and `apl links --branch` lists the docs a branch is for. Each row shows the branch's pull request and, once it is merged, the commit it was squashed into. Add `--resolve` to refresh those from GitHub first.
 - When an implementer will not open the plan itself, for example an orchestrator that pastes a section into a subagent's prompt, run `apl link <doc> --branch <name>`.
 - `apl unlink <doc> --branch <name>` removes a link that is wrong.
 

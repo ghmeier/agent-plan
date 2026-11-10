@@ -131,6 +131,12 @@ apl log --links
 
 `show --json` and `ls --json` include a `links` array for each doc, with each linked branch's `branch`, `commit`, `pr`, `merged`, and `prState`. These commands only read: they never record links.
 
+### Pull requests and squash merges
+
+If you squash-merge, a branch's own commits never reach the default branch, so the pull request is the only record of what the branch became. apl asks GitHub for the pull request whose head is the recorded tip and writes it to the docs branch: `Code-PR` with the number, then `Code-Merged` with the squash commit once it merges, or `Code-PR-State: closed` if it closes without merging. A link with either of the last two is resolved. An open pull request stays unresolved and is checked again later.
+
+The lookup runs at session start (for the 20 most recently updated unresolved links), in Claude Code right after `gh pr create` or `gh pr merge`, and on demand with `apl links --resolve`. It needs the `gh` CLI signed in to GitHub and is skipped without an error when `gh` is missing or fails.
+
 ## Agent Usage
 
 - **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit. `apl new` prints the path to write to.

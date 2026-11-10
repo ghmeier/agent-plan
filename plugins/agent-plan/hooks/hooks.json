@@ -1,5 +1,5 @@
 {
-  "description": "Pull teammates' docs and show open handoffs at session start; publish doc edits in the background when a turn ends; link a doc to the work branch when a session reads or edits it. All do nothing in repos without an apl docs branch.",
+  "description": "Pull teammates' docs and show open handoffs at session start; publish doc edits in the background when a turn ends; link a doc to the work branch when a session reads or edits it; record pull requests for linked branches after gh pr create or gh pr merge. All do nothing in repos without an apl docs branch.",
   "hooks": {
     "SessionStart": [
       {
@@ -39,6 +39,21 @@
             "type": "command",
             "if": "Write(**/.apl/**)",
             "command": "command -v apl >/dev/null 2>&1 || exit 0; apl hook doc-touched >/dev/null 2>&1; exit 0"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(gh pr create*)",
+            "command": "command -v apl >/dev/null 2>&1 || exit 0; apl hook pr-changed >/dev/null 2>&1; exit 0"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr merge*)",
+            "command": "command -v apl >/dev/null 2>&1 || exit 0; apl hook pr-changed >/dev/null 2>&1; exit 0"
           }
         ]
       }

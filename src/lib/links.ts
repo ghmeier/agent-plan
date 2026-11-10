@@ -2,6 +2,7 @@ import path, { join } from "node:path";
 import type { PlanConfig } from "../types";
 import { AgentPlanError, FileNotFoundError } from "./errors";
 import { branchExists, execGit, runGit, SKIP_CODE_HOOKS } from "./git";
+import { runGh } from "./github";
 import { realpathSafe, STORE_LINK_NAME } from "./paths";
 import { isDocPath } from "./plan-files";
 
@@ -464,4 +465,131 @@ export async function findLinkCommitRange(
     if (date === link.updatedAt) last = hash;
   }
   return first && last ? { first, last } : null;
+}
+
+interface PullRequest {
+  number: number;
+  state: string;
+  headRefOid: string;
+  mergeCommit: { oid: string } | null;
+  createdAt: string;
+  closedAt: string | null;
+  mergedAt: string | null;
+}
+
+/** gh reports a pull request that is still open as having no end time, or as year 1. */
+function endedAt(pullRequest: PullRequest): number | null {
+  const ended = [pullRequest.closedAt, pullRequest.mergedAt]
+    .filter((value): value is string => !!value && !value.startsWith("0001"))
+    .map((value) => Date.parse(value))
+    .filter((time) => !Number.isNaN(time));
+  return ended.length > 0 ? Math.min(...ended) : null;
+}
+
+function newestFirst(a: PullRequest, b: PullRequest): number {
+  return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+}
+
+/**
+ * Finds the pull request a link's branch produced, or null when there is none
+ * or gh could not be asked. The pull request whose head is the recorded tip
+ * wins. Commits pushed after the last record leave no exact match, so the
+ * fallback is the newest pull request for the branch that had not ended before
+ * the link was made. Branch names get reused, and an older pull request that
+ * closed before this link existed belongs to a different piece of work.
+ */
+async function findPullRequest(repoRoot: string, link: BranchLink): Promise<PullRequest | null> {
+  const result = await runGh(
+    [
+      "pr",
+      "list",
+      "--head",
+      link.branch,
+      "--state",
+      "all",
+      "--json",
+      "number,state,headRefOid,mergeCommit,createdAt,closedAt,mergedAt",
+    ],
+    repoRoot,
+  );
+  if (result.exitCode !== 0) return null;
+
+  let pullRequests: PullRequest[];
+  try {
+    const parsed: unknown = JSON.parse(result.stdout);
+    if (!Array.isArray(parsed)) return null;
+    pullRequests = parsed as PullRequest[];
+  } catch {
+    return null;
+  }
+
+  const exact = pullRequests.filter((pr) => link.commit !== null && pr.headRefOid === link.commit);
+  if (exact.length > 0) return exact.sort(newestFirst)[0] ?? null;
+
+  const linkedAt = Date.parse(link.linkedAt);
+  const current = pullRequests.filter((pr) => {
+    const ended = endedAt(pr);
+    return ended === null || ended >= linkedAt;
+  });
+  return current.sort(newestFirst)[0] ?? null;
+}
+
+export interface ResolveOptions {
+  /** Only resolve the link for this branch. */
+  branch?: string;
+  /** Only resolve this many of the most recently updated unresolved links. */
+  limit?: number;
+}
+
+/**
+ * Asks GitHub about each unresolved link and records what it finds: the pull
+ * request number, then the squash commit once merged or `closed` once closed
+ * without merging. The team squash-merges, so a branch's own commits never
+ * reach the default branch and the pull request is the only handle to the
+ * squash commit. Nothing is written when the record already says the same
+ * thing, so an open pull request costs one commit in total.
+ *
+ * Returns how many links changed. Any gh failure resolves nothing and never
+ * throws, because gh is often missing or signed out. Callers hold the store
+ * lock and have checked that the store is not mid-rebase.
+ */
+export async function resolveLinks(
+  repoRoot: string,
+  storeDir: string,
+  options: ResolveOptions = {},
+): Promise<number> {
+  let pending = (await readRecordedLinks(storeDir))
+    .filter((link) => !isResolved(link))
+    .filter((link) => options.branch === undefined || link.branch === options.branch)
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  if (options.limit !== undefined) pending = pending.slice(0, options.limit);
+
+  const found = await Promise.all(
+    pending.map(async (link) => ({ link, pullRequest: await findPullRequest(repoRoot, link) })),
+  );
+
+  let count = 0;
+  for (const { link, pullRequest } of found) {
+    if (!pullRequest) continue;
+
+    const trailers: Array<[key: string, value: string]> = [[TRAILER.branch, link.branch]];
+    const numberChanged = link.pr !== pullRequest.number;
+    if (numberChanged) trailers.push([TRAILER.pullRequest, String(pullRequest.number)]);
+
+    let subject = `Record pull request #${pullRequest.number} for ${link.branch}`;
+    const squashCommit = pullRequest.mergeCommit?.oid;
+    if (pullRequest.state === "MERGED" && squashCommit) {
+      trailers.push([TRAILER.merged, squashCommit], [TRAILER.pullRequestState, "merged"]);
+      subject = `Record ${link.branch} merged as ${squashCommit.slice(0, 7)}`;
+    } else if (pullRequest.state === "CLOSED") {
+      trailers.push([TRAILER.pullRequestState, "closed"]);
+      subject = `Record pull request #${pullRequest.number} closed for ${link.branch}`;
+    } else if (!numberChanged) {
+      continue;
+    }
+
+    await writeLinkCommit(storeDir, subject, trailers);
+    count += 1;
+  }
+  return count;
 }

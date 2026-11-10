@@ -8,12 +8,17 @@ import { branchExists } from "../lib/git";
 import {
   currentBranch,
   currentLinkOfBranch,
+  defaultBranch,
   linkOnTouch,
+  type ResolveOptions,
   readRecordedLinks,
+  recordLinks,
+  resolveLinks,
   storeRelativePath,
 } from "../lib/links";
+import { withStoreLock } from "../lib/lock";
 import { findRepoRoot, getStoreDir } from "../lib/paths";
-import { ensureStore } from "../lib/worktree";
+import { ensureStore, operationInProgress } from "../lib/worktree";
 import { findDocs } from "./ls";
 import { pullDocs } from "./pull";
 import { syncPlans } from "./sync";
@@ -47,6 +52,8 @@ async function sessionStart(): Promise<void> {
     console.log(`apl could not pull teammates' doc changes: ${message}`);
   }
 
+  await resolveRecentLinksQuietly();
+
   console.log(
     "This repo keeps plans, research, and handoffs in .apl/. Load the agent-plan:apl skill before reading or writing them.",
   );
@@ -62,6 +69,81 @@ async function sessionStart(): Promise<void> {
   console.log("Open handoffs in .apl/ (read one with `apl show <path>`):");
   for (const doc of open) {
     console.log(`- ${doc.file}${doc.meta.title ? `: ${doc.meta.title}` : ""}`);
+  }
+}
+
+/** Hooks look up at most this many links, the most recently updated first, to stay fast. */
+const HOOK_RESOLVE_LIMIT = 20;
+
+/**
+ * Looks up pull requests for links whose branch has not been merged yet. It
+ * runs once per session, which picks up pull requests opened or merged
+ * elsewhere, such as in GitHub's web page. It must never fail the hook or
+ * print, so every error is swallowed.
+ */
+async function resolveLinksQuietly(
+  repoRoot: string,
+  options: ResolveOptions,
+  record = false,
+): Promise<void> {
+  try {
+    const storeDir = await ensureStore(repoRoot, await readConfig(repoRoot));
+    await withStoreLock(repoRoot, async () => {
+      if (await operationInProgress(storeDir)) return;
+      if (record) await recordLinks(repoRoot, storeDir);
+      await resolveLinks(repoRoot, storeDir, options);
+    });
+  } catch {
+    // Link lookup is a convenience. The next session or `apl links --resolve` retries.
+  }
+}
+
+async function resolveRecentLinksQuietly(): Promise<void> {
+  try {
+    await resolveLinksQuietly(await findRepoRoot(), { limit: HOOK_RESOLVE_LIMIT });
+  } catch {
+    // Not in a repo: nothing to resolve.
+  }
+}
+
+/** The directory a Claude Code hook was run from, or null when the input has none. */
+function hookWorkingDirectory(input: string): string | null {
+  try {
+    const cwd = (JSON.parse(input) as { cwd?: unknown } | null)?.cwd;
+    return typeof cwd === "string" && cwd ? cwd : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Runs after `gh pr create` or `gh pr merge`, so the pull request number or
+ * squash commit is recorded in the turn that produced it. It resolves the
+ * branch checked out in the hook's directory. After `gh pr merge
+ * --delete-branch` the checkout may already be back on the default branch,
+ * where the merged branch is unknown, so the recent links are resolved
+ * instead. Always silent and never fails, whatever the input.
+ */
+async function prChanged(): Promise<void> {
+  try {
+    const cwd = hookWorkingDirectory(await Bun.stdin.text()) ?? process.cwd();
+    const repoRoot = await findRepoRoot(cwd);
+    const config = await readConfig(repoRoot);
+    // The plugin runs this in every repo, and `ensureStore` would create the docs branch.
+    if (!(await branchExists(repoRoot, config.branch))) return;
+    const branch = await currentBranch(repoRoot);
+    const onWorkBranch =
+      branch !== null &&
+      branch !== config.branch &&
+      branch !== (await defaultBranch(repoRoot, config));
+
+    await resolveLinksQuietly(
+      repoRoot,
+      onWorkBranch ? { branch } : { limit: HOOK_RESOLVE_LIMIT },
+      true,
+    );
+  } catch {
+    // Malformed input or no repo: there is nothing to record.
   }
 }
 
@@ -142,6 +224,12 @@ export function registerHook(program: Command): void {
       "Run the Claude Code plugin's hook for an event (session-start, stop, or doc-touched)",
     )
     .action(async (event: string) => {
+      if (event === "pr-changed") {
+        // Checked before the docs-branch guard, which reads the current directory
+        // and not the hook's `cwd`.
+        await prChanged();
+        return;
+      }
       if (!(await docsEnabledHere())) return;
       if (event === "session-start") {
         await sessionStart();

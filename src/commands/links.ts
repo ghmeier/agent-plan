@@ -8,6 +8,7 @@ import {
   findLinkCommitRange,
   readRecordedLinks,
   recordLinks,
+  resolveLinks,
 } from "../lib/links";
 import { withStoreLock } from "../lib/lock";
 import { info, printTable } from "../lib/output";
@@ -20,6 +21,8 @@ export interface LinksOptions {
   branch?: string | boolean;
   json?: boolean;
   edits?: boolean;
+  /** Ask GitHub about every unresolved link before listing. */
+  resolve?: boolean;
 }
 
 /**
@@ -38,7 +41,10 @@ export async function listLinks(
     const storeDir = await ensureStore(repoRoot, config);
 
     // Recording needs a store that isn't mid-rebase. Listing doesn't.
-    if (!(await operationInProgress(storeDir))) await recordLinks(repoRoot, storeDir);
+    if (!(await operationInProgress(storeDir))) {
+      await recordLinks(repoRoot, storeDir);
+      if (options.resolve) await resolveLinks(repoRoot, storeDir);
+    }
 
     const doc = docInput === undefined ? undefined : await docPathForLookup(storeDir, docInput);
     const branch =
@@ -137,6 +143,7 @@ export function registerLinks(program: Command): void {
     .description("List the code branches linked to docs")
     .option("--branch [name]", "Only links for this branch (the current branch when no name)")
     .option("--edits", "Show the edits made to <doc> while --branch was being worked on")
+    .option("--resolve", "Look up pull requests with gh and record merged and closed links first")
     .option("--json", "Output in JSON format")
     .action(async (doc: string | undefined, options: LinksOptions) => {
       if (options.edits) {

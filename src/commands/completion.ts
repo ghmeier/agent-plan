@@ -84,7 +84,7 @@ _apl_completions() {
         --branch) COMPREPLY=($(compgen -W "$(apl __complete branches 2>/dev/null)" -- "$cur")) ;;
         *)
           if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--branch --edits --json" -- "$cur"))
+            COMPREPLY=($(compgen -W "--branch --edits --resolve --json" -- "$cur"))
           else
             COMPREPLY=($(compgen -W "$(apl __complete files "$cur" 2>/dev/null)" -- "$cur"))
           fi
@@ -233,6 +233,7 @@ _apl() {
           _arguments \\
             '--branch[Only links for this branch]:branch:($(apl __complete branches 2>/dev/null))' \\
             '--edits[Show edits made to the doc while the branch was worked on]' \\
+            '--resolve[Look up pull requests with gh first]' \\
             '--json[Output in JSON format]' \\
             '::doc:($(apl __complete files 2>/dev/null))'
           ;;
@@ -355,6 +356,7 @@ complete -c apl -n '__fish_seen_subcommand_from ls search' -n '__fish_prev_arg_i
 # link / unlink / links
 complete -c apl -n '__fish_seen_subcommand_from link unlink links' -l branch -r -d 'Branch to use'
 complete -c apl -n '__fish_seen_subcommand_from links' -l edits -d 'Show edits made to the doc while the branch was worked on'
+complete -c apl -n '__fish_seen_subcommand_from links' -l resolve -d 'Look up pull requests with gh first'
 complete -c apl -n '__fish_seen_subcommand_from links' -l json  -d 'Output in JSON format'
 complete -c apl -n '__fish_seen_subcommand_from link unlink links' -a '(apl __complete files 2>/dev/null)'
 complete -c apl -n '__fish_seen_subcommand_from show ls link unlink links' -n '__fish_prev_arg_in --branch' \\
