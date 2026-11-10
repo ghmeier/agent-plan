@@ -20,7 +20,7 @@ _apl_completions() {
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
   fi
 
-  local subcommands="init new add commit sync pull status log show ls search diff types completion"
+  local subcommands="init new add commit sync pull status log show ls search diff types link unlink links completion"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=($(compgen -W "$subcommands" -- "$cur"))
@@ -32,10 +32,11 @@ _apl_completions() {
     show)
       case "$prev" in
         --at) COMPREPLY=($(compgen -W "$(apl __complete versions 2>/dev/null)" -- "$cur")) ;;
+        --branch) COMPREPLY=($(compgen -W "$(apl __complete branches 2>/dev/null)" -- "$cur")) ;;
         --section) ;;
         *)
           if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--at --raw --json --outline --section" -- "$cur"))
+            COMPREPLY=($(compgen -W "--at --branch --raw --json --outline --section" -- "$cur"))
           else
             COMPREPLY=($(compgen -W "$(apl __complete files "$cur" 2>/dev/null)" -- "$cur"))
           fi
@@ -44,7 +45,7 @@ _apl_completions() {
       ;;
     log)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "-n --json" -- "$cur"))
+        COMPREPLY=($(compgen -W "-n --links --json" -- "$cur"))
       else
         COMPREPLY=($(compgen -W "$(apl __complete files "$cur" 2>/dev/null)" -- "$cur"))
       fi
@@ -61,8 +62,33 @@ _apl_completions() {
         --status) COMPREPLY=($(compgen -W "$(apl __complete statuses 2>/dev/null)" -- "$cur")) ;;
         --tag)    COMPREPLY=($(compgen -W "$(apl __complete tags 2>/dev/null)" -- "$cur")) ;;
         --type)   COMPREPLY=($(compgen -W "$(apl __complete types 2>/dev/null)" -- "$cur")) ;;
+        --branch) COMPREPLY=($(compgen -W "$(apl __complete branches 2>/dev/null)" -- "$cur")) ;;
         --limit)  ;;
-        *)        COMPREPLY=($(compgen -W "--json --short --type --status --tag --limit" -- "$cur")) ;;
+        *)        COMPREPLY=($(compgen -W "--json --short --type --status --tag --branch --limit" -- "$cur")) ;;
+      esac
+      ;;
+    link|unlink)
+      case "$prev" in
+        --branch) COMPREPLY=($(compgen -W "$(apl __complete branches 2>/dev/null)" -- "$cur")) ;;
+        *)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--branch" -- "$cur"))
+          else
+            COMPREPLY=($(compgen -W "$(apl __complete files "$cur" 2>/dev/null)" -- "$cur"))
+          fi
+          ;;
+      esac
+      ;;
+    links)
+      case "$prev" in
+        --branch) COMPREPLY=($(compgen -W "$(apl __complete branches 2>/dev/null)" -- "$cur")) ;;
+        *)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--branch --edits --json" -- "$cur"))
+          else
+            COMPREPLY=($(compgen -W "$(apl __complete files "$cur" 2>/dev/null)" -- "$cur"))
+          fi
+          ;;
       esac
       ;;
     search)
@@ -157,6 +183,9 @@ _apl() {
         'search:Find docs by keyword'
         'diff:Show uncommitted changes'
         'types:List doc types'
+        'link:Link a doc to a code branch'
+        'unlink:Remove a link between a doc and a code branch'
+        'links:List the code branches linked to docs'
         'completion:Print shell completion script'
       )
       _describe 'subcommand' subcommands
@@ -166,6 +195,7 @@ _apl() {
         show)
           _arguments \\
             '--at[Show the file as of a commit ref]:ref:($(apl __complete versions 2>/dev/null))' \\
+            '--branch[Show the docs linked to a branch]:branch:($(apl __complete branches 2>/dev/null))' \\
             '--raw[Print file as-is without metadata header]' \\
             '--json[Output in JSON format]' \\
             '--outline[List headings with line numbers]' \\
@@ -175,6 +205,7 @@ _apl() {
         log)
           _arguments \\
             '-n[Limit number of commits]:number:()' \\
+            '--links[Include link commits]' \\
             '--json[Output in JSON format]' \\
             '::doc:($(apl __complete files 2>/dev/null))'
           ;;
@@ -190,7 +221,20 @@ _apl() {
             '--type[Filter by doc type]:type:($(apl __complete types 2>/dev/null))' \\
             '--status[Filter by status]:status:($(apl __complete statuses 2>/dev/null))' \\
             '--tag[Filter by tag]:tag:($(apl __complete tags 2>/dev/null))' \\
+            '--branch[Only docs linked to this branch]:branch:($(apl __complete branches 2>/dev/null))' \\
             '--limit[Show at most this many docs]:number:()'
+          ;;
+        link|unlink)
+          _arguments \\
+            '--branch[Use this branch instead of the current one]:branch:($(apl __complete branches 2>/dev/null))' \\
+            ':doc:($(apl __complete files 2>/dev/null))'
+          ;;
+        links)
+          _arguments \\
+            '--branch[Only links for this branch]:branch:($(apl __complete branches 2>/dev/null))' \\
+            '--edits[Show edits made to the doc while the branch was worked on]' \\
+            '--json[Output in JSON format]' \\
+            '::doc:($(apl __complete files 2>/dev/null))'
           ;;
         search)
           _arguments \\
@@ -268,6 +312,9 @@ complete -c apl -n '__fish_use_subcommand' -a ls         -d 'List docs'
 complete -c apl -n '__fish_use_subcommand' -a search     -d 'Find docs by keyword'
 complete -c apl -n '__fish_use_subcommand' -a diff       -d 'Show uncommitted changes'
 complete -c apl -n '__fish_use_subcommand' -a types      -d 'List doc types'
+complete -c apl -n '__fish_use_subcommand' -a link       -d 'Link a doc to a code branch'
+complete -c apl -n '__fish_use_subcommand' -a unlink     -d 'Remove a link between a doc and a code branch'
+complete -c apl -n '__fish_use_subcommand' -a links      -d 'List the code branches linked to docs'
 complete -c apl -n '__fish_use_subcommand' -a completion -d 'Print shell completion script'
 
 # show
@@ -276,10 +323,12 @@ complete -c apl -n '__fish_seen_subcommand_from show' -l raw     -d 'Print as-is
 complete -c apl -n '__fish_seen_subcommand_from show' -l json    -d 'Output in JSON format'
 complete -c apl -n '__fish_seen_subcommand_from show' -l outline -d 'List headings with line numbers'
 complete -c apl -n '__fish_seen_subcommand_from show' -l section -r -d 'Print only matching sections'
+complete -c apl -n '__fish_seen_subcommand_from show' -l branch -r -d 'Show the docs linked to a branch'
 complete -c apl -n '__fish_seen_subcommand_from show' -a '(apl __complete files 2>/dev/null)'
 
 # log
 complete -c apl -n '__fish_seen_subcommand_from log' -s n    -d 'Limit number of commits'
+complete -c apl -n '__fish_seen_subcommand_from log' -l links -d 'Include link commits'
 complete -c apl -n '__fish_seen_subcommand_from log' -l json -d 'Output in JSON format'
 complete -c apl -n '__fish_seen_subcommand_from log' -a '(apl __complete files 2>/dev/null)'
 
@@ -289,6 +338,7 @@ complete -c apl -n '__fish_seen_subcommand_from diff' -a '(apl __complete files 
 
 # ls / search
 complete -c apl -n '__fish_seen_subcommand_from ls' -l short  -d 'Filename-only output'
+complete -c apl -n '__fish_seen_subcommand_from ls' -l branch -r -d 'Only docs linked to this branch'
 complete -c apl -n '__fish_seen_subcommand_from search' -l path -r -d 'Only search under this directory'
 complete -c apl -n '__fish_seen_subcommand_from ls search' -l json   -d 'Output in JSON format'
 complete -c apl -n '__fish_seen_subcommand_from ls search' -l status -d 'Filter by status'
@@ -301,6 +351,14 @@ complete -c apl -n '__fish_seen_subcommand_from ls search' -n '__fish_prev_arg_i
   -a '(apl __complete statuses 2>/dev/null)'
 complete -c apl -n '__fish_seen_subcommand_from ls search' -n '__fish_prev_arg_in --tag' \\
   -a '(apl __complete tags 2>/dev/null)'
+
+# link / unlink / links
+complete -c apl -n '__fish_seen_subcommand_from link unlink links' -l branch -r -d 'Branch to use'
+complete -c apl -n '__fish_seen_subcommand_from links' -l edits -d 'Show edits made to the doc while the branch was worked on'
+complete -c apl -n '__fish_seen_subcommand_from links' -l json  -d 'Output in JSON format'
+complete -c apl -n '__fish_seen_subcommand_from link unlink links' -a '(apl __complete files 2>/dev/null)'
+complete -c apl -n '__fish_seen_subcommand_from show ls link unlink links' -n '__fish_prev_arg_in --branch' \\
+  -a '(apl __complete branches 2>/dev/null)'
 
 # new
 complete -c apl -n '__fish_seen_subcommand_from new' -l title -r -d 'Title for the doc'
