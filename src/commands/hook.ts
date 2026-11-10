@@ -1,10 +1,17 @@
-import path from "node:path";
+import path, { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { readDocTypes } from "../lib/doc-types";
 import { AgentPlanError } from "../lib/errors";
+import { parseFrontmatter } from "../lib/frontmatter";
 import { branchExists } from "../lib/git";
-import { linkOnTouch, storeRelativePath } from "../lib/links";
+import {
+  currentBranch,
+  currentLinkOfBranch,
+  linkOnTouch,
+  readRecordedLinks,
+  storeRelativePath,
+} from "../lib/links";
 import { findRepoRoot, getStoreDir } from "../lib/paths";
 import { ensureStore } from "../lib/worktree";
 import { findDocs } from "./ls";
@@ -56,6 +63,33 @@ async function sessionStart(): Promise<void> {
   for (const doc of open) {
     console.log(`- ${doc.file}${doc.meta.title ? `: ${doc.meta.title}` : ""}`);
   }
+}
+
+/**
+ * Lists the docs linked to the branch this checkout is on, so a session that
+ * starts on a work branch is pointed at its plan. Only reads: it records no
+ * link.
+ */
+async function printLinkedDocs(): Promise<void> {
+  const repoRoot = await findRepoRoot();
+  const branch = await currentBranch(repoRoot);
+  if (!branch) return;
+
+  const storeDir = await ensureStore(repoRoot, await readConfig(repoRoot));
+  const link = currentLinkOfBranch(await readRecordedLinks(storeDir), branch);
+
+  const lines: string[] = [];
+  for (const doc of link?.docs ?? []) {
+    const file = Bun.file(join(storeDir, doc));
+    // A doc can be deleted after it was linked.
+    if (!(await file.exists())) continue;
+    const { title } = parseFrontmatter(await file.text()).meta;
+    lines.push(`- ${doc}${title ? `: ${title}` : ""}`);
+  }
+  if (lines.length === 0) return;
+
+  console.log("Docs linked to this branch (read them with `apl show --branch`):");
+  for (const line of lines) console.log(line);
 }
 
 /**
@@ -111,6 +145,7 @@ export function registerHook(program: Command): void {
       if (!(await docsEnabledHere())) return;
       if (event === "session-start") {
         await sessionStart();
+        await printLinkedDocs();
       } else if (event === "stop") {
         await stop();
       } else if (event === "doc-touched") {

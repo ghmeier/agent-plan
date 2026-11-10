@@ -104,6 +104,7 @@ describe("apl show", () => {
         updated: "2026-01-02",
       },
       body: "# CLI plan\n",
+      links: [],
     });
   });
 

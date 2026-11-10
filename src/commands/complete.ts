@@ -11,7 +11,7 @@ import {
   STORE_CONFIG_FILE,
 } from "../lib/doc-types";
 import { parseFrontmatter } from "../lib/frontmatter";
-import { runGit } from "../lib/git";
+import { branchExists, runGit } from "../lib/git";
 import { findRepoRoot, getStoreDir } from "../lib/paths";
 import { isDocPath, listMarkdownFiles } from "../lib/plan-files";
 
@@ -172,6 +172,26 @@ async function completeVersions(file?: string, cwd?: string): Promise<void> {
   for (const line of stdout.split("\n").filter((l) => l.length > 0)) console.log(line);
 }
 
+/** Local branch names, except the docs branch, which never links to a doc. */
+async function completeBranches(cwd?: string): Promise<void> {
+  const repoRoot = await safeRepoRoot(cwd);
+  if (!repoRoot) return;
+
+  const config = await safeConfig(repoRoot);
+  if (!config || !(await branchExists(repoRoot, config.branch))) return;
+
+  const { stdout, ok } = await gitSpawn(repoRoot, [
+    "for-each-ref",
+    "--format=%(refname:short)",
+    "refs/heads",
+  ]);
+  if (!ok) return;
+
+  for (const branch of stdout.split("\n").filter((b) => b.length > 0)) {
+    if (branch !== config.branch) console.log(branch);
+  }
+}
+
 export async function runComplete(
   context: string,
   arg: string | undefined,
@@ -190,6 +210,9 @@ export async function runComplete(
         break;
       case "types":
         await completeTypes(opts.cwd);
+        break;
+      case "branches":
+        await completeBranches(opts.cwd);
         break;
       case "versions":
         await completeVersions(arg, opts.cwd);

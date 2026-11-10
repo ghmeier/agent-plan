@@ -248,7 +248,9 @@ describe("recording automatic links", () => {
       const commit = await apl(repo.dir, ["commit"]);
 
       expect(commit.exitCode).toBe(0);
-      expect((await planLogMessages(repo))[0]).toBe("Link feature/billing to plan/billing.md");
+      expect((await planLogMessages(repo, ["--links"]))[0]).toBe(
+        "Link feature/billing to plan/billing.md",
+      );
       const [link, ...rest] = await readLinks(repo);
       expect(rest).toEqual([]);
       expect(link?.branch).toBe("feature/billing");

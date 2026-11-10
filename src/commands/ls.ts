@@ -4,12 +4,14 @@ import { readConfig } from "../lib/config";
 import { findType, readDocTypes, typeOf, withValidStatus } from "../lib/doc-types";
 import { AgentPlanError } from "../lib/errors";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
+import { linksOfDoc, readRecordedLinks } from "../lib/links";
 import { colors, hint, info } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 import { listMarkdownFiles } from "../lib/plan-files";
 import { ensureStore } from "../lib/worktree";
 
 export interface LsOptions {
+  branch?: string;
   json?: boolean;
   limit?: number;
   short?: boolean;
@@ -77,14 +79,26 @@ export async function listPlans(
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
   const storeDir = await ensureStore(repoRoot, config);
-  const matching = await findDocs(storeDir, { ...options, path });
+  // Links are read once, whatever the number of docs. Listing never records any.
+  const links = options.json || options.branch ? await readRecordedLinks(storeDir) : [];
+  const linkedToBranch = options.branch
+    ? new Set(links.filter((link) => link.branch === options.branch).flatMap((link) => link.docs))
+    : null;
+  const matching = (await findDocs(storeDir, { ...options, path })).filter(
+    (entry) => !linkedToBranch || linkedToBranch.has(entry.file),
+  );
   const filtered = matching.slice(0, options.limit);
   if (!options.json) warnIfLimited(filtered.length, matching.length);
 
   const files = filtered.map((e) => e.file);
 
   if (options.json) {
-    const jsonEntries = filtered.map((e) => ({ file: e.file, type: e.type, meta: e.meta }));
+    const jsonEntries = filtered.map((e) => ({
+      file: e.file,
+      type: e.type,
+      meta: e.meta,
+      links: linksOfDoc(links, e.file),
+    }));
     console.log(JSON.stringify({ files: jsonEntries }));
     return files;
   }
@@ -175,6 +189,7 @@ export function registerLs(program: Command): void {
     .option("--type <type>", "Filter by doc type (see 'apl types')")
     .option("--status <status>", "Filter by status")
     .option("--tag <tag>", "Filter by tag")
+    .option("--branch <name>", "Only docs linked to this branch")
     .option("--limit <n>", "Show at most this many docs", parseLimit)
     .action(async (path: string | undefined, options: LsOptions) => {
       await listPlans(path, undefined, options);
