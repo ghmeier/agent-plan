@@ -43,7 +43,7 @@ Releases are published to npm as `@ghmeier/agent-plan` by `.github/workflows/pub
 
 Tests are end-to-end: they drive the real CLI as a subprocess against throwaway repos. Don't import command functions directly into tests.
 
-- Use helpers from `test/harness.ts` (`repo.storeDir` is the checkout's `.apl` link): `createInitializedRepo`, `createRepo`, `createRemote` + `addOrigin`, `createSecondaryCheckout`, `addPlan`, `apl(cwd, args)`, `git(cwd, args)`, `planLogMessages`. Clean up with `await using repo = ...`.
+- Use helpers from `test/harness.ts` (`repo.storeDir` is the checkout's `.apl` link): `createInitializedRepo`, `createRepo`, `createRemote` + `addOrigin`, `createSecondaryCheckout`, `addPlan`, `apl(cwd, args)`, `git(cwd, args)`, `planLogMessages`, and for links `startWorkBranch`, `commitCode`, `readLinks`. Clean up with `await using repo = ...`.
 - The harness strips inherited `GIT_*` variables and global git config, and puts an `apl` shim first on `PATH` so hooks and completion scripts call the code under test. Don't bypass `run()` when spawning processes in tests.
 - Tests run concurrently, so every test must build its own repos and share no state.
 - Group tests by user workflow (`authoring`, `reading`, `sync`, `checkouts`, `init`, `types`, `completion`, `linking`), not by source file.

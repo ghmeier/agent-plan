@@ -4,6 +4,7 @@ import {
   addOrigin,
   addPlan,
   apl,
+  commitCode,
   createInitializedRepo,
   createRemote,
   createRepo,
@@ -11,6 +12,8 @@ import {
   git,
   planLogMessages,
   type Repo,
+  readLinks,
+  startWorkBranch,
 } from "./harness";
 
 /**
@@ -23,39 +26,11 @@ const LINK_TEST_TIMEOUT_MS = 20_000;
 
 const PLAN = "plan/billing.md";
 
-interface Link {
-  branch: string;
-  docs: string[];
-  commit: string | null;
-  pr: number | null;
-  merged: string | null;
-}
-
 /** A repo with one plan in the store, checked out on `main`. */
 async function createRepoWithPlan(): Promise<Repo> {
   const repo = await createInitializedRepo();
   await addPlan(repo, PLAN, "# Billing\n");
   return repo;
-}
-
-/** Adds a commit to the code branch checked out at `repo` and returns its hash. */
-async function commitCode(repo: Repo, file: string): Promise<string> {
-  await Bun.write(join(repo.dir, file), `${file}\n`);
-  await git(repo.dir, ["add", file]);
-  await git(repo.dir, ["commit", "-m", `Add ${file}`]);
-  return git(repo.dir, ["rev-parse", "HEAD"]);
-}
-
-/** Creates `branch` with one commit of its own and leaves it checked out. Returns its tip. */
-async function startWorkBranch(repo: Repo, branch: string): Promise<string> {
-  await git(repo.dir, ["checkout", "-b", branch]);
-  return commitCode(repo, `${branch.replaceAll("/", "-")}.txt`);
-}
-
-async function readLinks(repo: Repo, args: string[] = []): Promise<Link[]> {
-  const result = await apl(repo.dir, ["links", "--json", ...args]);
-  if (result.exitCode !== 0) throw new Error(`apl links failed: ${result.stderr}`);
-  return (JSON.parse(result.stdout) as { links: Link[] }).links;
 }
 
 describe("apl link", () => {
