@@ -133,7 +133,9 @@ All three were done on 2026-11-10.
 
 Four, in order:
 
-1. **Storage and explicit linking.** Implemented on the `branch-linking-storage` branch, not yet merged. Add `src/lib/links.ts`: read and write `branch.<name>.apl-doc`, find the default branch, write link commits through `execGit`, and parse the docs log into links. Add `apl link`, `apl unlink`, and `apl links`. Make `commit` and `sync` record new links and moved tips, and make the `ifChanged` path push them.
+All four are open and stacked, each based on the one before: `branch-linking-storage` (#1), `branch-linking-auto` (#2), `branch-linking-reading` (#3), `branch-linking-pull-requests` (#4). Merge them in order.
+
+1. **Storage and explicit linking.** Add `src/lib/links.ts`: read and write `branch.<name>.apl-doc`, find the default branch, write link commits through `execGit`, and parse the docs log into links. Add `apl link`, `apl unlink`, and `apl links`. Make `commit` and `sync` record new links and moved tips, and make the `ifChanged` path push them.
 2. **Automatic linking.** Link from `apl show`. Add `apl hook doc-touched` and the plugin's `PostToolUse` entries. Update `SKILL.md` and check it with `claude plugin validate .`.
 3. **Reading links.** Add `show --branch`, `ls --branch`, the `links` JSON field, `log --links`, `links --edits`, the SessionStart line, and shell completion for branch names.
 4. **Pull request resolution.** Add the `gh` lookup, `apl links --resolve`, the once-per-session run in the SessionStart hook, and `apl hook pr-changed` with its plugin `PostToolUse` entries.
