@@ -1,6 +1,6 @@
 ---
 title: Linking plans to branches, commits, and pull requests
-status: draft
+status: active
 tags: [cli, git]
 created: 2026-11-10
 updated: 2026-11-10
@@ -25,7 +25,7 @@ Links must survive squash merges and deleted branches, because that is how work 
 - **Trailers on code commits do not survive.** All of the last 400 commits on gazebo's main branch are squash commits whose subject ends in `(#N)`, and the ones inspected use the pull request title and description as the message. The branch's own commit messages are discarded. The pull request number is the only durable handle on a squashed branch.
 - **Trailers on docs-branch commits work.** A prototype confirmed that `git log --format='%(trailers:key=Code-Branch,valueonly)' -- <doc>` and `git log --grep='^Code-Branch: <branch>$'` return the right commits, that empty commits can carry the trailers, and that both survive the `git rebase` that `apl sync` runs (git 2.50.1).
 - **A shared metadata file would conflict.** Every sync from every teammate would rewrite the same file. Commits on the docs branch only ever append, so they cannot conflict.
-- **Claude Code hooks fire for subagents.** Plugin `PostToolUse` hooks run for a subagent's tool calls, and the input includes `agent_id`. For file tools, `tool_input.file_path` is always absolute. Hooks accept an `if` field in permission-rule syntax, so a hook can be limited to paths under `.apl/` before any process starts. The documentation does not say what `cwd` is for a subagent running in its own worktree.
+- **Claude Code hooks fire for subagents.** Plugin `PostToolUse` hooks run for a subagent's tool calls, and the input includes `agent_id`. For file tools, `tool_input.file_path` is always absolute. Hooks accept an `if` field in permission-rule syntax, so a hook can be limited to paths under `.apl/` before any process starts. The documentation does not say what `cwd` is for a subagent running in its own worktree, so it was measured (see "Checks before writing code").
 
 ## Approach
 
@@ -69,7 +69,7 @@ Rules that apply to all three:
 - Linking is idempotent. A second read of the same plan from the same branch does nothing.
 - A branch can have several docs, and a doc can have several branches.
 
-For the hook, the branch comes from the checkout that contains the file path, since each worktree has its own `.apl` link. When the path points into the main checkout or the store itself, the hook falls back to the checkout containing `cwd`. Compare paths with `realpath`.
+For the hook, the branch comes from the checkout that contains `cwd` in the hook's input. For a subagent with its own worktree, `cwd` is that worktree, whichever path it used to reach the doc (see "Checks before writing code").
 
 The trigger only writes the git config value. It makes no docs commit, so it is fast and cannot fail a read.
 
@@ -101,7 +101,7 @@ It never runs in the Stop hook, which fires every turn. A link with an open pull
 
 ### Reading links
 
-- `apl links [<doc>] [--branch <name>] [--json]` lists links. For a doc: each branch, its last tip, its pull request, and its squash commit. For a branch: its docs. With neither, it uses the current branch.
+- `apl links [<doc>] [--branch <name>] [--json]` lists links. For a doc: each branch, its last tip, its pull request, and its squash commit. For a branch: its docs. With neither, it lists every link. `--branch` without a name means the current branch.
 - `apl show --branch [<name>]` prints every doc linked to a branch, defaulting to the current branch. This is the command for starting a session on a branch with its plan as context. Each doc starts with its usual metadata header, and `--outline` and `--section` apply to each.
 - `apl ls --branch <name>` filters the list to docs linked to that branch.
 - `apl show --json` and `apl ls --json` gain a `links` field. Existing fields do not change.
@@ -121,15 +121,19 @@ Plan edits made during a branch's lifetime are derived, not recorded: they are t
 
 ## Steps
 
-Check first, before writing code:
+### Checks before writing code
 
-1. Run a subagent with worktree isolation under a throwaway `PostToolUse` hook that logs its input. Record what `cwd` and `tool_input.file_path` contain when the subagent reads `.apl/plan/x.md` by relative path, by its worktree's absolute path, and by the main checkout's absolute path.
-2. Confirm that an `if` rule of `Read(**/.apl/**)` limits the hook to those paths, including when `.apl` is a symlink.
-3. Confirm that empty commits survive `git rebase` on the git version CI uses.
+All three were done on 2026-11-10.
 
-Then four pull requests, in order:
+1. **A worktree subagent's hook input.** Measured with Claude Code 2.1.322: a headless session spawned a subagent with worktree isolation under a `PostToolUse` hook that logged its input. `cwd` was the subagent's worktree for every call, including a Read of the plan through the main checkout's absolute path. `agent_id` was set for the subagent and absent for the main session, and `session_id` was the parent's. `tool_input.file_path` was the absolute path as the agent addressed it, not resolved through the `.apl` symlink.
+2. **The `if` filter.** A hook with `"if": "Read(**/.apl/**)"` ran for all three reads of the plan (main session, worktree path, main checkout path) and not for a Read of `README.md`.
+3. **Empty commits and rebase.** Covered by the test "sync publishes a link, rebased onto a teammate's doc changes" in `test/linking.test.ts`, which runs on CI's git.
 
-1. **Storage and explicit linking.** Add `src/lib/links.ts`: read and write `branch.<name>.apl-doc`, find the default branch, write link commits through `execGit`, and parse the docs log into links. Add `apl link`, `apl unlink`, and `apl links`. Make `commit` and `sync` record new links and moved tips, and make the `ifChanged` path push them.
+### Pull requests
+
+Four, in order:
+
+1. **Storage and explicit linking.** Implemented on the `branch-linking-storage` branch, not yet merged. Add `src/lib/links.ts`: read and write `branch.<name>.apl-doc`, find the default branch, write link commits through `execGit`, and parse the docs log into links. Add `apl link`, `apl unlink`, and `apl links`. Make `commit` and `sync` record new links and moved tips, and make the `ifChanged` path push them.
 2. **Automatic linking.** Link from `apl show`. Add `apl hook doc-touched` and the plugin's `PostToolUse` entries. Update `SKILL.md` and check it with `claude plugin validate .`.
 3. **Reading links.** Add `show --branch`, `ls --branch`, the `links` JSON field, `log --links`, `links --edits`, the SessionStart line, and shell completion for branch names.
 4. **Pull request resolution.** Add the `gh` lookup, `apl links --resolve`, the once-per-session run in the SessionStart hook, and `apl hook pr-changed` with its plugin `PostToolUse` entries.
@@ -138,8 +142,9 @@ Each pull request updates the README. Tests go in a new `linking` workflow file 
 
 ## Risks
 
-- **A subagent's read is attributed to the default branch and dropped.** This happens if the hook's `cwd` is the parent session's directory and the subagent reads the plan through the main checkout's absolute path. `apl show` is not affected. The first check in Steps measures how real this is. If it is common, add a `SubagentStart` hook that tells subagents to read plans with `apl show`.
 - **Reading a doc for reference links it.** Every doc type links, so an implementer that opens two plans and a research note links all three. `apl unlink` corrects it. The cost of a wrong link is one extra row in `apl links` and one extra doc printed by `apl show --branch`, which matters most when that output is used as a new session's context.
+- **`apl sync` does not commit when no remote is configured.** It returns before committing, so in a repo without a remote the Stop hook never records links. `apl commit` and `apl links` do.
+- **An unlink can be undone by a teammate's clone.** `apl unlink` removes the working link only in the clone where it runs. If a teammate's clone still has it, their next sync links the doc again.
 - **A branch is deleted before any sync records it.** The working link disappears with the branch. The Stop hook syncs every turn, so this needs a branch to be created, linked, and deleted within one turn.
 - **Resolution depends on GitHub and `gh`.** Without them a link keeps its branch name and tip but never gets a squash commit. Another forge would need its own lookup.
 - **Link commits add volume to the docs log.** There is at most one per linked branch per sync, and only when the tip moved. Queries filter with `--grep='^Code-Branch: '` in a single `git log` call, which is fast at gazebo's size. Measure it there before the third pull request.
