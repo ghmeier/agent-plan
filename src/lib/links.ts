@@ -1,8 +1,8 @@
-import { join } from "node:path";
+import path, { join } from "node:path";
 import type { PlanConfig } from "../types";
 import { AgentPlanError, FileNotFoundError } from "./errors";
 import { branchExists, execGit, runGit, SKIP_CODE_HOOKS } from "./git";
-import { STORE_LINK_NAME } from "./paths";
+import { realpathSafe, STORE_LINK_NAME } from "./paths";
 import { isDocPath } from "./plan-files";
 
 /**
@@ -140,6 +140,52 @@ export async function addWorkingLink(
   if ((await readWorkingLinks(repoRoot)).get(branch)?.includes(doc)) return false;
   await execGit(["config", "--local", "--add", workingLinkKey(branch), doc], repoRoot);
   return true;
+}
+
+/**
+ * Links `doc` to the branch checked out at `repoRoot` because the doc was just
+ * read or edited from there. Only the working link is written: no docs-branch
+ * commit and no store lock, so the next commit or sync records it. Linking is
+ * best-effort, so this never throws and the read or edit that triggered it is
+ * never disturbed.
+ */
+export async function linkOnTouch(
+  repoRoot: string,
+  config: PlanConfig,
+  doc: string,
+): Promise<void> {
+  try {
+    if (!isDocPath(doc)) return;
+    const branch = await currentBranch(repoRoot);
+    if (!branch || branch === config.branch) return;
+    if (branch === (await defaultBranch(repoRoot, config))) return;
+    await addWorkingLink(repoRoot, branch, doc);
+  } catch {
+    // Best-effort: a failed link must not fail a read.
+  }
+}
+
+/**
+ * The store-relative path of `filePath` when it is a file in the store, or
+ * null. `filePath` is the path as an agent addressed it, so it may go through
+ * any checkout's `.apl` link or the store's real path. Both sides are
+ * compared by their real paths too, since macOS paths can differ only by a
+ * symlinked prefix such as /var and /private/var.
+ */
+export async function storeRelativePath(
+  storeDir: string,
+  filePath: string,
+): Promise<string | null> {
+  const storeReal = await realpathSafe(storeDir);
+  for (const candidate of [filePath, await realpathSafe(filePath)]) {
+    for (const root of [storeDir, storeReal]) {
+      const relative = path.relative(root, candidate);
+      if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) {
+        return relative.split(path.sep).join("/");
+      }
+    }
+  }
+  return null;
 }
 
 /** Removes the link from git config. Returns false when there was none. */

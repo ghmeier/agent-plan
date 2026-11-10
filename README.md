@@ -110,6 +110,8 @@ The link is stored in two places, and neither is a file:
 
 Every `apl commit` and `apl sync` records a new commit for each linked branch whose tip has moved, from any checkout. A session on the default branch therefore records the commits an implementer made on a work branch. The default branch and the docs branch can't be linked.
 
+Most links are made for you. Running `apl show` on a doc from a work branch links it to that branch, and so does the Claude Code plugin: its hook runs after the agent reads, edits, or writes a file under `.apl/` and links that doc to the branch of the checkout the agent works in. This only writes the git config part, so it adds no commit and never fails the read. The next `apl commit` or `apl sync` records it on the docs branch. Use `apl link` for work that never opens the doc itself, such as an orchestrator that pastes a section of a plan into a subagent's prompt.
+
 ## Agent Usage
 
 - **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit. `apl new` prints the path to write to.
