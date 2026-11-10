@@ -36,3 +36,21 @@ export function info(msg: string): void {
 export function hint(msg: string): void {
   console.error(`${colors.dim("ℹ")} ${msg}`);
 }
+
+/**
+ * Prints rows under a header. A terminal gets aligned columns. Anything else,
+ * usually an agent or a script, gets tab-separated rows, which are smaller
+ * and easier to parse.
+ */
+export function printTable(headers: string[], rows: string[][]): void {
+  if (process.stdout.isTTY !== true) {
+    console.log(headers.join("\t"));
+    for (const row of rows) console.log(row.join("\t"));
+    return;
+  }
+
+  const widths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]?.length ?? 0)));
+  const pad = (s: string, i: number) => s.padEnd(widths[i] ?? s.length);
+  console.log(headers.map((h, i) => colors.bold(pad(h, i))).join("  "));
+  for (const row of rows) console.log(row.map(pad).join("  ").trimEnd());
+}

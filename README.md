@@ -84,10 +84,36 @@ Supported fields:
 - **created**: ISO date, auto-set on first `apl add`
 - **updated**: ISO date, auto-set on every `apl add` and `apl commit`
 
+## Linking Docs to Branches
+
+A doc can be linked to the code branches that implement it, so you can go from a plan to its branches and from a branch to its plan without searching.
+
+```bash
+# On a work branch: link a doc to it
+apl link plan/billing
+
+# From anywhere: link a doc to a named branch
+apl link plan/billing --branch feature/billing
+
+# Every link, the links of one doc, or the docs of one branch
+apl links
+apl links plan/billing
+apl links --branch feature/billing   # no name means the current branch
+
+apl unlink plan/billing --branch feature/billing
+```
+
+The link is stored in two places, and neither is a file:
+
+- **In the code repo's git config**, as `branch.<name>.apl-doc`. Every checkout of your clone shares it, and git removes it when the branch is deleted. It tells apl which branches to watch.
+- **On the docs branch**, as an empty commit whose trailers (`Linked-Doc`, `Code-Branch`, `Code-Commit`) name the doc, the branch, and the branch's tip. This is what `apl links` reads. It is synced to teammates and stays after the branch is deleted.
+
+Every `apl commit` and `apl sync` records a new commit for each linked branch whose tip has moved, from any checkout. A session on the default branch therefore records the commits an implementer made on a work branch. The default branch and the docs branch can't be linked.
+
 ## Agent Usage
 
 - **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit. `apl new` prints the path to write to.
-- **Structured output**: `show`, `ls`, `search`, `log`, `diff`, `status`, `types`, and `new` support `--json`.
+- **Structured output**: `show`, `ls`, `search`, `links`, `log`, `diff`, `status`, `types`, and `new` support `--json`.
 
 ### Claude Code setup
 

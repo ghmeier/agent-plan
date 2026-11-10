@@ -3,6 +3,7 @@ import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { stampTimestamps } from "../lib/frontmatter";
 import { execGit, runGit, SKIP_CODE_HOOKS } from "../lib/git";
+import { recordLinks } from "../lib/links";
 import { withStoreLock } from "../lib/lock";
 import { info, success, warn } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
@@ -92,7 +93,10 @@ export interface CommitOptions {
   quiet?: boolean;
 }
 
-/** Commits pending changes in the store. Returns whether there was anything to commit. */
+/**
+ * Commits pending changes in the store, then records linked code branches
+ * that are new or have moved. Returns whether either made a commit.
+ */
 export async function commitPlans(options: CommitOptions = {}): Promise<boolean> {
   const repoRoot = await findRepoRoot(options.cwd);
   const config = await readConfig(repoRoot);
@@ -102,16 +106,22 @@ export async function commitPlans(options: CommitOptions = {}): Promise<boolean>
   await assertNoOperationInProgress(storeDir);
   const hasChanges = await stageAndStamp(storeDir);
 
-  if (!hasChanges) {
-    if (!options.quiet) info("Nothing to commit");
-    return false;
+  if (hasChanges) {
+    const message = options.message ?? (await defaultMessage(storeDir));
+    await execGit(["commit", SKIP_CODE_HOOKS, "-m", message], storeDir);
   }
 
-  const message = options.message ?? (await defaultMessage(storeDir));
-  await execGit(["commit", SKIP_CODE_HOOKS, "-m", message], storeDir);
+  // After the doc commit, so the index is clean and the link commits are empty.
+  const recordedLinks = await recordLinks(repoRoot, storeDir);
 
-  if (!options.quiet) success("Committed doc changes");
-  return true;
+  if (!options.quiet) {
+    if (hasChanges) success("Committed doc changes");
+    if (recordedLinks > 0) {
+      success(`Recorded links for ${recordedLinks} ${recordedLinks === 1 ? "branch" : "branches"}`);
+    }
+    if (!hasChanges && recordedLinks === 0) info("Nothing to commit");
+  }
+  return hasChanges || recordedLinks > 0;
 }
 
 export function registerCommit(program: Command): void {
