@@ -23,9 +23,6 @@ const TRAILER = {
   commit: "Code-Commit",
   linked: "Linked-Doc",
   unlinked: "Unlinked-Doc",
-  pullRequest: "Code-PR",
-  merged: "Code-Merged",
-  pullRequestState: "Code-PR-State",
 } as const;
 
 export interface BranchLink {
@@ -33,10 +30,6 @@ export interface BranchLink {
   docs: string[];
   /** The branch tip when the link was last recorded. */
   commit: string | null;
-  pr: number | null;
-  /** The commit on the default branch that the pull request was squashed into. */
-  merged: string | null;
-  prState: string | null;
   linkedAt: string;
   updatedAt: string;
 }
@@ -182,15 +175,10 @@ const LOG_FIELD_SEP = "\x1f";
 const LOG_RECORD_SEP = "\x1e";
 const TRAILER_LINE = /^([A-Za-z-]+): (.*)$/;
 
-function isResolved(link: BranchLink): boolean {
-  return link.merged !== null || link.prState === "closed";
-}
-
 /**
- * Every link recorded on the docs branch, oldest first. A branch name that is
- * reused after its pull request was merged or closed starts a new link, so
- * one name can appear more than once. Links whose docs were all unlinked are
- * left out.
+ * Every link recorded on the docs branch, one per branch name, oldest first.
+ * Nothing records that a branch was merged, so a name that is reused later
+ * continues its old link. Links whose docs were all unlinked are left out.
  */
 export async function readRecordedLinks(storeDir: string): Promise<BranchLink[]> {
   // The message is parsed here rather than with git's %(trailers) format,
@@ -225,14 +213,11 @@ export async function readRecordedLinks(storeDir: string): Promise<BranchLink[]>
     const commit = lastValue(TRAILER.commit);
 
     let link = latest.get(branch);
-    if (!link || (isResolved(link) && commit !== undefined && commit !== link.commit)) {
+    if (!link) {
       link = {
         branch,
         docs: [],
         commit: null,
-        pr: null,
-        merged: null,
-        prState: null,
         linkedAt: date,
         updatedAt: date,
       };
@@ -247,10 +232,6 @@ export async function readRecordedLinks(storeDir: string): Promise<BranchLink[]>
     link.docs = link.docs.filter((doc) => !unlinked.includes(doc));
 
     if (commit !== undefined) link.commit = commit;
-    const pr = Number(lastValue(TRAILER.pullRequest));
-    if (Number.isInteger(pr) && pr > 0) link.pr = pr;
-    link.merged = lastValue(TRAILER.merged) ?? link.merged;
-    link.prState = lastValue(TRAILER.pullRequestState) ?? link.prState;
     link.updatedAt = date;
   }
 
@@ -305,8 +286,7 @@ export async function recordLinks(repoRoot: string, storeDir: string): Promise<n
     const tipMoved =
       existing?.commit !== tip &&
       !(existing?.commit && (await isAncestor(repoRoot, tip, existing.commit)));
-    const startsNewLink = !existing || (isResolved(existing) && tipMoved);
-    const newDocs = startsNewLink ? docs : docs.filter((doc) => !existing.docs.includes(doc));
+    const newDocs = existing ? docs.filter((doc) => !existing.docs.includes(doc)) : docs;
     if (newDocs.length === 0 && !tipMoved) continue;
 
     const subject =

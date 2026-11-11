@@ -62,14 +62,12 @@ export async function listLinks(
   }
 
   printTable(
-    ["BRANCH", "DOC", "COMMIT", "PR", "MERGED", "UPDATED"],
+    ["BRANCH", "DOC", "COMMIT", "UPDATED"],
     links.flatMap((link) =>
       link.docs.map((doc) => [
         link.branch,
         doc,
         link.commit?.slice(0, 7) ?? "",
-        link.pr === null ? "" : `#${link.pr}`,
-        link.merged?.slice(0, 7) ?? (link.prState === "closed" ? "closed" : ""),
         link.updatedAt.slice(0, 10),
       ]),
     ),

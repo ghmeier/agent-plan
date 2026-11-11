@@ -253,9 +253,6 @@ export interface Link {
   branch: string;
   docs: string[];
   commit: string | null;
-  pr: number | null;
-  merged: string | null;
-  prState: string | null;
 }
 
 /** Links read through `apl links --json`, newest first. */

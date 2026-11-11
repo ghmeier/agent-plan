@@ -368,7 +368,7 @@ describe("apl links", () => {
       const result = await apl(repo.dir, ["links"]);
 
       const [header, row] = result.stdout.trim().split("\n");
-      expect(header).toBe("BRANCH\tDOC\tCOMMIT\tPR\tMERGED\tUPDATED");
+      expect(header).toBe("BRANCH\tDOC\tCOMMIT\tUPDATED");
       expect(row?.split("\t").slice(0, 3)).toEqual(["feature/billing", PLAN, tip.slice(0, 7)]);
     },
     LINK_TEST_TIMEOUT_MS,
