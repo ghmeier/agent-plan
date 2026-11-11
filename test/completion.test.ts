@@ -180,10 +180,21 @@ describe("apl __complete", () => {
     for (const hash of all) expect(hash).toMatch(/^[0-9a-f]{7,}$/);
   });
 
+  test("branches lists local branches and leaves out the docs branch", async () => {
+    await using repo = await createRepoWithTaggedPlans();
+    await git(repo.dir, ["branch", "feature/billing"]);
+
+    const branches = await completeLines(repo.dir, ["branches"]);
+
+    expect(branches).toEqual(["feature/billing", "main"]);
+    expect(branches).not.toContain("apl");
+  });
+
   test.each([
     { context: "files" },
     { context: "tags" },
     { context: "versions" },
+    { context: "branches" },
     { context: "unknown" },
   ])("$context prints nothing and succeeds before init or outside a repo", async ({ context }) => {
     await using repo = await createRepo();
@@ -233,6 +244,9 @@ describe.skipIf(!HAS_BASH)("bash completion", () => {
         "search",
         "diff",
         "types",
+        "link",
+        "unlink",
+        "links",
         "completion",
       ],
     },
@@ -240,11 +254,11 @@ describe.skipIf(!HAS_BASH)("bash completion", () => {
     { line: ["apl", "show", ""], expected: ["alpha.md", "beta.md"] },
     {
       line: ["apl", "show", "--"],
-      expected: ["--at", "--raw", "--json", "--outline", "--section"],
+      expected: ["--at", "--branch", "--raw", "--json", "--outline", "--section"],
     },
     {
       line: ["apl", "ls", "--"],
-      expected: ["--json", "--short", "--type", "--status", "--tag", "--limit"],
+      expected: ["--json", "--short", "--type", "--status", "--tag", "--branch", "--limit"],
     },
     {
       line: ["apl", "search", "billing", "--"],
@@ -266,11 +280,30 @@ describe.skipIf(!HAS_BASH)("bash completion", () => {
     { line: ["apl", "ls", "--type", ""], expected: ["plan", "research", "handoff"] },
     { line: ["apl", "new", ""], expected: ["plan", "research", "handoff"] },
     { line: ["apl", "ls", "--tag", ""], expected: ["backend", "cli", "docs"] },
+    { line: ["apl", "link", ""], expected: ["alpha.md", "beta.md"] },
+    { line: ["apl", "unlink", "--"], expected: ["--branch"] },
+    { line: ["apl", "links", "--"], expected: ["--branch", "--edits", "--json"] },
+    { line: ["apl", "links", ""], expected: ["alpha.md", "beta.md"] },
+    { line: ["apl", "log", "--"], expected: ["--links", "--json"] },
   ])("completes $line", async ({ line, expected }) => {
     await using repo = await createRepoWithTaggedPlans();
 
     expect(await bashCandidates(repo, line)).toEqual([...expected]);
   });
+
+  test.each(["show", "ls", "link", "unlink", "links"])(
+    "completes local branch names for 'apl %s --branch '",
+    async (subcommand) => {
+      await using repo = await createRepoWithTaggedPlans();
+      await git(repo.dir, ["branch", "feature/billing"]);
+
+      const candidates = await bashCandidates(repo, ["apl", subcommand, "--branch", ""]);
+
+      expect(candidates).toContain("feature/billing");
+      expect(candidates).toContain("main");
+      expect(candidates).not.toContain("apl");
+    },
+  );
 });
 
 /**

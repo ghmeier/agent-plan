@@ -112,6 +112,25 @@ Every `apl commit` and `apl sync` records a new commit for each linked branch wh
 
 Most links are made for you. Running `apl show` on a doc from a work branch links it to that branch, and so does the Claude Code plugin: its hook runs after the agent reads, edits, or writes a file under `.apl/` and links that doc to the branch of the checkout the agent works in. This only writes the git config part, so it adds no commit and never fails the read. The next `apl commit` or `apl sync` records it on the docs branch. Use `apl link` for work that never opens the doc itself, such as an orchestrator that pastes a section of a plan into a subagent's prompt.
 
+To read links back:
+
+```bash
+# Print every doc linked to a branch (the current branch when no name), for starting a session with its plan
+apl show --branch
+apl show --branch feature/billing --section Rollout   # --outline, --section, and --raw apply to each doc
+
+# List only the docs linked to a branch
+apl ls --branch feature/billing
+
+# Docs-branch edits to a doc since it was linked to the branch
+apl links plan/billing --branch feature/billing --edits
+
+# Link commits are hidden from the log unless asked for
+apl log --links
+```
+
+`show --json` and `ls --json` include a `links` array for each doc, with each linked branch's `branch` and `commit`. These commands only read: they never record links.
+
 ## Agent Usage
 
 - **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit. `apl new` prints the path to write to.

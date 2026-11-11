@@ -132,12 +132,12 @@ describe("apl link", () => {
       await using repo = await createRepoWithPlan();
       await startWorkBranch(repo, "feature/billing");
       await apl(repo.dir, ["link", PLAN]);
-      const messagesAfterFirstLink = await planLogMessages(repo);
+      const messagesAfterFirstLink = await planLogMessages(repo, ["--links"]);
 
       const result = await apl(repo.dir, ["link", PLAN]);
 
       expect(result.stdout).toContain("already linked");
-      expect(await planLogMessages(repo)).toEqual(messagesAfterFirstLink);
+      expect(await planLogMessages(repo, ["--links"])).toEqual(messagesAfterFirstLink);
     },
     LINK_TEST_TIMEOUT_MS,
   );
@@ -184,12 +184,12 @@ describe("recording linked branches", () => {
       await using repo = await createRepoWithPlan();
       await startWorkBranch(repo, "feature/billing");
       await apl(repo.dir, ["link", PLAN]);
-      const messagesAfterLink = await planLogMessages(repo);
+      const messagesAfterLink = await planLogMessages(repo, ["--links"]);
 
       const result = await apl(repo.dir, ["commit"]);
 
       expect(result.stdout).toContain("Nothing to commit");
-      expect(await planLogMessages(repo)).toEqual(messagesAfterLink);
+      expect(await planLogMessages(repo, ["--links"])).toEqual(messagesAfterLink);
     },
     LINK_TEST_TIMEOUT_MS,
   );

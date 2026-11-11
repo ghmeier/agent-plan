@@ -389,3 +389,52 @@ export async function docPathForLookup(storeDir: string, input: string): Promise
     return input.startsWith(linkPrefix) ? input.slice(linkPrefix.length) : input;
   }
 }
+
+/** A link as the `links` field of `show --json` and `ls --json` reports it. */
+export interface DocLink {
+  branch: string;
+  commit: string | null;
+}
+
+/** The links that include `doc`, oldest first, as the `links` JSON field reports them. */
+export function linksOfDoc(links: BranchLink[], doc: string): DocLink[] {
+  return links
+    .filter((link) => link.docs.includes(doc))
+    .map(({ branch, commit }) => ({ branch, commit }));
+}
+
+/**
+ * The link for `branch`, or undefined when the branch has no links.
+ */
+export function currentLinkOfBranch(links: BranchLink[], branch: string): BranchLink | undefined {
+  return latestLinkByBranch(links).get(branch);
+}
+
+/**
+ * The docs-branch commit that opened `link`, found by matching the link's
+ * date against the commits that name its branch. Edits made since are then
+ * found by commit ancestry rather than by clock time, which only has
+ * one-second resolution. Null when the commit is not in this clone.
+ */
+export async function findFirstLinkCommit(
+  storeDir: string,
+  link: BranchLink,
+): Promise<string | null> {
+  const output = await execGit(
+    [
+      "log",
+      "--reverse",
+      `--grep=^${TRAILER.branch}: `,
+      `--format=%H${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%B${LOG_RECORD_SEP}`,
+    ],
+    storeDir,
+  );
+
+  const branchLine = `${TRAILER.branch}: ${link.branch}`;
+  for (const record of output.split(LOG_RECORD_SEP)) {
+    const [hash, date, message] = record.trim().split(LOG_FIELD_SEP);
+    if (!hash || !message?.split("\n").some((line) => line.trim() === branchLine)) continue;
+    if (date === link.linkedAt) return hash;
+  }
+  return null;
+}
