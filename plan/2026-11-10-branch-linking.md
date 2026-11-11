@@ -1,6 +1,6 @@
 ---
 title: Linking plans to branches and commits
-status: active
+status: completed
 tags: [cli, git]
 created: 2026-11-10
 updated: 2026-11-11
@@ -108,7 +108,7 @@ All three were done on 2026-11-10.
 
 ### Pull requests
 
-Three are open and stacked, each based on the one before: `branch-linking-storage` (#1), `branch-linking-auto` (#2), `branch-linking-reading` (#3). Merge them in order. A fourth, pull request lookup (#4, `branch-linking-pull-requests`), was built and closed without merging.
+Three were merged into `main` on 2026-11-10: storage and explicit linking (#1), automatic linking (#2), and reading links (#3). A fourth, pull request lookup (#4, `branch-linking-pull-requests`), was built and closed without merging.
 
 1. **Storage and explicit linking.** Add `src/lib/links.ts`: read and write `branch.<name>.apl-doc`, find the default branch, write link commits through `execGit`, and parse the docs log into links. Add `apl link`, `apl unlink`, and `apl links`. Make `commit` and `sync` record new links and moved tips, and make the `ifChanged` path push them.
 2. **Automatic linking.** Link from `apl show`. Add `apl hook doc-touched` and the plugin's `PostToolUse` entries. Update `SKILL.md` and check it with `claude plugin validate .`.
