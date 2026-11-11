@@ -7,6 +7,7 @@ import { AgentPlanError, FileNotFoundError } from "../lib/errors";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
 import { runGit } from "../lib/git";
 import { findHeadings, findSections, type Heading, type Section } from "../lib/headings";
+import { linkOnTouch } from "../lib/links";
 import { colors } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
 import { ensureStore } from "../lib/worktree";
@@ -83,6 +84,9 @@ export async function showPlan(
   const content = options.at
     ? await readFromHistory(storeDir, options.at, planPath)
     : await readFromWorktree(storeDir, planPath);
+
+  // `show` accepts a path without `.md`, but links are keyed by the real path.
+  await linkOnTouch(repoRoot, config, planPath.endsWith(".md") ? planPath : `${planPath}.md`);
 
   if (options.raw && !options.outline && options.section === undefined) {
     process.stdout.write(content);

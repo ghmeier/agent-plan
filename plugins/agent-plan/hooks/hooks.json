@@ -1,5 +1,5 @@
 {
-  "description": "Pull teammates' docs and show open handoffs at session start; publish doc edits in the background when a turn ends. Both do nothing in repos without an apl docs branch.",
+  "description": "Pull teammates' docs and show open handoffs at session start; publish doc edits in the background when a turn ends; link a doc to the work branch when a session reads or edits it. All do nothing in repos without an apl docs branch.",
   "hooks": {
     "SessionStart": [
       {
@@ -7,6 +7,38 @@
           {
             "type": "command",
             "command": "command -v apl >/dev/null 2>&1 || { echo 'The apl CLI is not installed, so docs in .apl/ are unavailable. Tell the user to install it with: bun i -g @ghmeier/agent-plan@latest'; exit 0; }; apl hook session-start"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Read(**/.apl/**)",
+            "command": "command -v apl >/dev/null 2>&1 || exit 0; apl hook doc-touched >/dev/null 2>&1; exit 0"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Edit(**/.apl/**)",
+            "command": "command -v apl >/dev/null 2>&1 || exit 0; apl hook doc-touched >/dev/null 2>&1; exit 0"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Write(**/.apl/**)",
+            "command": "command -v apl >/dev/null 2>&1 || exit 0; apl hook doc-touched >/dev/null 2>&1; exit 0"
           }
         ]
       }

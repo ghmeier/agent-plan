@@ -16,6 +16,14 @@ Plans, research, and handoffs live in `.apl/`, a directory shared by every check
 - `apl show <path>` prints a doc. For a long doc, run `apl show <path> --outline` to list its headings, then `apl show <path> --section "<heading>"` to print only the part you need.
 - `apl status` shows uncommitted docs and whether teammates have pushed changes since the last pull.
 
+## Linked branches
+
+Reading or editing a doc from a work branch links the doc to that branch automatically, so there is nothing to maintain. Read plans with `apl show`, which always attributes the read to the right branch.
+
+- `apl links` lists every link. `apl links <doc>` lists the branches that implement a doc, and `apl links --branch` lists the docs a branch is for.
+- When an implementer will not open the plan itself, for example an orchestrator that pastes a section into a subagent's prompt, run `apl link <doc> --branch <name>`.
+- `apl unlink <doc> --branch <name>` removes a link that is wrong.
+
 ## Create a doc
 
 ```bash
