@@ -232,7 +232,7 @@ _apl() {
         links)
           _arguments \\
             '--branch[Only links for this branch]:branch:($(apl __complete branches 2>/dev/null))' \\
-            '--edits[Show edits made to the doc while the branch was worked on]' \\
+            '--edits[Show edits made to the doc since it was linked to the branch]' \\
             '--json[Output in JSON format]' \\
             '::doc:($(apl __complete files 2>/dev/null))'
           ;;
@@ -354,7 +354,7 @@ complete -c apl -n '__fish_seen_subcommand_from ls search' -n '__fish_prev_arg_i
 
 # link / unlink / links
 complete -c apl -n '__fish_seen_subcommand_from link unlink links' -l branch -r -d 'Branch to use'
-complete -c apl -n '__fish_seen_subcommand_from links' -l edits -d 'Show edits made to the doc while the branch was worked on'
+complete -c apl -n '__fish_seen_subcommand_from links' -l edits -d 'Show edits made to the doc since it was linked to the branch'
 complete -c apl -n '__fish_seen_subcommand_from links' -l json  -d 'Output in JSON format'
 complete -c apl -n '__fish_seen_subcommand_from link unlink links' -a '(apl __complete files 2>/dev/null)'
 complete -c apl -n '__fish_seen_subcommand_from show ls link unlink links' -n '__fish_prev_arg_in --branch' \\

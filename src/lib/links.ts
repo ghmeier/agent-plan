@@ -394,36 +394,32 @@ export async function docPathForLookup(storeDir: string, input: string): Promise
 export interface DocLink {
   branch: string;
   commit: string | null;
-  pr: number | null;
-  merged: string | null;
-  prState: string | null;
 }
 
 /** The links that include `doc`, oldest first, as the `links` JSON field reports them. */
 export function linksOfDoc(links: BranchLink[], doc: string): DocLink[] {
   return links
     .filter((link) => link.docs.includes(doc))
-    .map(({ branch, commit, pr, merged, prState }) => ({ branch, commit, pr, merged, prState }));
+    .map(({ branch, commit }) => ({ branch, commit }));
 }
 
 /**
- * The link that is current for `branch`: the newest one, since a reused
- * branch name starts a new link. Undefined when the branch has no links.
+ * The link for `branch`, or undefined when the branch has no links.
  */
 export function currentLinkOfBranch(links: BranchLink[], branch: string): BranchLink | undefined {
   return latestLinkByBranch(links).get(branch);
 }
 
 /**
- * The docs-branch commits that opened and last updated `link`, found by
- * matching the link's dates against the commits that name its branch. Edits
- * are then bounded by commit ancestry rather than by clock time, which only
- * has one-second resolution. Null when the commits are not in this clone.
+ * The docs-branch commit that opened `link`, found by matching the link's
+ * date against the commits that name its branch. Edits made since are then
+ * found by commit ancestry rather than by clock time, which only has
+ * one-second resolution. Null when the commit is not in this clone.
  */
-export async function findLinkCommitRange(
+export async function findFirstLinkCommit(
   storeDir: string,
   link: BranchLink,
-): Promise<{ first: string; last: string } | null> {
+): Promise<string | null> {
   const output = await execGit(
     [
       "log",
@@ -435,13 +431,10 @@ export async function findLinkCommitRange(
   );
 
   const branchLine = `${TRAILER.branch}: ${link.branch}`;
-  let first: string | undefined;
-  let last: string | undefined;
   for (const record of output.split(LOG_RECORD_SEP)) {
     const [hash, date, message] = record.trim().split(LOG_FIELD_SEP);
     if (!hash || !message?.split("\n").some((line) => line.trim() === branchLine)) continue;
-    if (date === link.linkedAt) first ??= hash;
-    if (date === link.updatedAt) last = hash;
+    if (date === link.linkedAt) return hash;
   }
-  return first && last ? { first, last } : null;
+  return null;
 }

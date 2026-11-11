@@ -20,8 +20,6 @@ const LOG_RECORD_SEP = "\x1e";
 export interface LogRange {
   /** Only commits after this one. */
   after?: string;
-  /** Only commits up to and including this one. Defaults to the branch tip. */
-  until?: string;
   /** Include the commits that record links between docs and code branches. */
   includeLinks?: boolean;
 }
@@ -35,8 +33,7 @@ export async function getLogFromWorktree(
   const format = `%H${LOG_FIELD_SEP}%s${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%an${LOG_RECORD_SEP}`;
   const args = ["log", `--pretty=format:${format}`];
   if (!range.includeLinks) args.push("--invert-grep", "--grep=^Code-Branch: ");
-  if (range.after) args.push(`${range.after}..${range.until ?? "HEAD"}`);
-  else if (range.until) args.push(range.until);
+  if (range.after) args.push(`${range.after}..HEAD`);
   if (limit !== undefined) args.push("-n", String(limit));
   if (file) args.push("--", file);
 

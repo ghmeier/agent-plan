@@ -5,7 +5,7 @@ import {
   type BranchLink,
   branchOrCurrent,
   docPathForLookup,
-  findLinkCommitRange,
+  findFirstLinkCommit,
   readRecordedLinks,
   recordLinks,
 } from "../lib/links";
@@ -81,9 +81,8 @@ export async function listLinks(
 
 /**
  * Prints the docs-branch commits that changed `docInput` while `--branch` was
- * being worked on: from the commit that linked it to the commit that last
- * updated the link, which is the merge once the branch has merged and
- * otherwise the latest commit on the docs branch.
+ * being worked on: every edit since the commit that linked it. Nothing
+ * records when a branch is merged, so the list has no end.
  */
 export async function listLinkEdits(
   docInput: string | undefined,
@@ -111,12 +110,9 @@ export async function listLinkEdits(
       .at(-1);
     if (!link) throw new AgentPlanError(`${doc} is not linked to branch '${branch}'.`);
 
-    const range = await findLinkCommitRange(storeDir, link);
-    if (!range) return [];
-    return getLogFromWorktree(storeDir, doc, undefined, {
-      after: range.first,
-      until: link.merged ? range.last : undefined,
-    });
+    const linkCommit = await findFirstLinkCommit(storeDir, link);
+    if (!linkCommit) return [];
+    return getLogFromWorktree(storeDir, doc, undefined, { after: linkCommit });
   });
 
   if (options.json) {
@@ -134,7 +130,7 @@ export function registerLinks(program: Command): void {
     .command("links [doc]")
     .description("List the code branches linked to docs")
     .option("--branch [name]", "Only links for this branch (the current branch when no name)")
-    .option("--edits", "Show the edits made to <doc> while --branch was being worked on")
+    .option("--edits", "Show the edits made to <doc> since it was linked to --branch")
     .option("--json", "Output in JSON format")
     .action(async (doc: string | undefined, options: LinksOptions) => {
       if (options.edits) {

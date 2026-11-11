@@ -122,14 +122,14 @@ apl show --branch feature/billing --section Rollout   # --outline, --section, an
 # List only the docs linked to a branch
 apl ls --branch feature/billing
 
-# Docs-branch edits to a doc while the branch was being worked on
+# Docs-branch edits to a doc since it was linked to the branch
 apl links plan/billing --branch feature/billing --edits
 
 # Link commits are hidden from the log unless asked for
 apl log --links
 ```
 
-`show --json` and `ls --json` include a `links` array for each doc, with each linked branch's `branch`, `commit`, `pr`, `merged`, and `prState`. These commands only read: they never record links.
+`show --json` and `ls --json` include a `links` array for each doc, with each linked branch's `branch` and `commit`. These commands only read: they never record links.
 
 ## Agent Usage
 

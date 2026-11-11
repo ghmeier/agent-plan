@@ -223,9 +223,6 @@ interface ListedDoc {
   links: Array<{
     branch: string;
     commit: string | null;
-    pr: number | null;
-    merged: string | null;
-    prState: string | null;
   }>;
 }
 
@@ -302,8 +299,8 @@ describe("the links field of --json output", () => {
       const result = await apl(repo.dir, ["show", BILLING, "--json"]);
 
       expect(JSON.parse(result.stdout).links).toEqual([
-        { branch: "feature/one", commit: firstTip, pr: null, merged: null, prState: null },
-        { branch: "feature/two", commit: secondTip, pr: null, merged: null, prState: null },
+        { branch: "feature/one", commit: firstTip },
+        { branch: "feature/two", commit: secondTip },
       ]);
     },
     LINK_TEST_TIMEOUT_MS,
@@ -319,9 +316,7 @@ describe("the links field of --json output", () => {
 
       const { files } = JSON.parse(result.stdout) as { files: ListedDoc[] };
       const byFile = new Map(files.map((entry) => [entry.file, entry]));
-      expect(byFile.get(BILLING)?.links).toEqual([
-        { branch: "feature/billing", commit: tip, pr: null, merged: null, prState: null },
-      ]);
+      expect(byFile.get(BILLING)?.links).toEqual([{ branch: "feature/billing", commit: tip }]);
       expect(byFile.get(INVOICES)?.links).toEqual([]);
     },
     LINK_TEST_TIMEOUT_MS,
