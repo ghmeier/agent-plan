@@ -233,3 +233,31 @@ export async function writeStoreConfig(repo: Repo, config: unknown): Promise<voi
   await git(repo.storeDir, ["add", "config.json"]);
   await git(repo.storeDir, ["commit", "-m", "Configure doc types"]);
 }
+
+/** Adds a commit to the code branch checked out at `repo` and returns its hash. */
+export async function commitCode(repo: Repo, file: string): Promise<string> {
+  await Bun.write(join(repo.dir, file), `${file}\n`);
+  await git(repo.dir, ["add", file]);
+  await git(repo.dir, ["commit", "-m", `Add ${file}`]);
+  return git(repo.dir, ["rev-parse", "HEAD"]);
+}
+
+/** Creates `branch` with one commit of its own and leaves it checked out. Returns its tip. */
+export async function startWorkBranch(repo: Repo, branch: string): Promise<string> {
+  await git(repo.dir, ["checkout", "-b", branch]);
+  return commitCode(repo, `${branch.replaceAll("/", "-")}.txt`);
+}
+
+/** A link between a code branch and docs, as `apl links --json` returns it. */
+export interface Link {
+  branch: string;
+  docs: string[];
+  commit: string | null;
+}
+
+/** Links read through `apl links --json`, newest first. */
+export async function readLinks(repo: Repo, args: string[] = []): Promise<Link[]> {
+  const result = await apl(repo.dir, ["links", "--json", ...args]);
+  if (result.exitCode !== 0) throw new Error(`apl links failed: ${result.stderr}`);
+  return (JSON.parse(result.stdout) as { links: Link[] }).links;
+}

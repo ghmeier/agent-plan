@@ -25,6 +25,7 @@ Releases are published to npm as `@ghmeier/agent-plan` by `.github/workflows/pub
 - `src/lib/doc-types.ts`: doc types. A doc's type is its top-level directory in the store; types come from a `config.json` committed on the docs branch, or the built-ins (`plan`, `research`, `handoff`). Also templates for `apl new`. Status validity depends on the type, so it's checked at display time (`withValidStatus`), never while parsing.
 - `src/lib/frontmatter.ts`: YAML frontmatter parsing, and `setFrontmatterFields`, which edits only the lines for the keys it sets so everything else in a user's frontmatter survives. Never re-serialize a whole frontmatter block.
 - `src/lib/hooks.ts`: the optional post-commit auto-commit hook. It appends a marked section to an existing hook rather than overwriting it.
+- `src/lib/links.ts`: links between docs and the code branches that implement them. The working link is git config in the code repo (`branch.<name>.apl-doc`); the record is an empty commit on the docs branch with `Linked-Doc`, `Code-Branch`, and `Code-Commit` trailers. `recordLinks` runs on every commit and sync. Queries read only the docs-branch log, never a file.
 - `src/lib/remote.ts`: fetch, rebase, and ahead/behind helpers shared by `sync`, `pull`, and `status`.
 - `plugins/agent-plan/`: the Claude Code and Codex plugin (skill and hooks) that teams enable to teach agents the tool. Both agents share the skill. Claude Code reads `.claude-plugin/plugin.json` and `hooks/hooks.json`, listed by `.claude-plugin/marketplace.json`; Codex reads the root `plugin.json` and `hooks/codex-hooks.json`, listed by `.agents/plugins/marketplace.json`. Codex rejects unknown manifest fields and has no `asyncRewake`, which is why each agent has its own manifest and hooks file; keep the two hooks files in step. Update the skill when a command agents use changes, and check it with `claude plugin validate .`. The plugin has no `version` on purpose, so every commit reaches users.
 - `src/commands/complete.ts` is the hidden backend for shell completion; `completion.ts` emits the bash/zsh/fish scripts that call it.
@@ -42,7 +43,7 @@ Releases are published to npm as `@ghmeier/agent-plan` by `.github/workflows/pub
 
 Tests are end-to-end: they drive the real CLI as a subprocess against throwaway repos. Don't import command functions directly into tests.
 
-- Use helpers from `test/harness.ts` (`repo.storeDir` is the checkout's `.apl` link): `createInitializedRepo`, `createRepo`, `createRemote` + `addOrigin`, `createSecondaryCheckout`, `addPlan`, `apl(cwd, args)`, `git(cwd, args)`, `planLogMessages`. Clean up with `await using repo = ...`.
+- Use helpers from `test/harness.ts` (`repo.storeDir` is the checkout's `.apl` link): `createInitializedRepo`, `createRepo`, `createRemote` + `addOrigin`, `createSecondaryCheckout`, `addPlan`, `apl(cwd, args)`, `git(cwd, args)`, `planLogMessages`, and for links `startWorkBranch`, `commitCode`, `readLinks`. Clean up with `await using repo = ...`.
 - The harness strips inherited `GIT_*` variables and global git config, and puts an `apl` shim first on `PATH` so hooks and completion scripts call the code under test. Don't bypass `run()` when spawning processes in tests.
 - Tests run concurrently, so every test must build its own repos and share no state.
-- Group tests by user workflow (`authoring`, `reading`, `sync`, `checkouts`, `init`, `types`, `completion`), not by source file.
+- Group tests by user workflow (`authoring`, `reading`, `sync`, `checkouts`, `init`, `types`, `completion`, `linking`), not by source file.
