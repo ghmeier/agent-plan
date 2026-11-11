@@ -1,28 +1,28 @@
 ---
-title: Linking plans to branches, commits, and pull requests
+title: Linking plans to branches and commits
 status: active
 tags: [cli, git]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-11
 ---
-# Linking plans to branches, commits, and pull requests
+# Linking plans to branches and commits
 
 Replaces the earlier `plan-repo-linking.md` draft, which stored links in a `.plan-meta.json` file on the docs branch.
 
 ## Goal
 
-Connect each plan to the branches, commits, and pull requests that implement it, without agents maintaining any link data. This makes three things possible:
+Connect each plan to the branches and commits that implement it, without agents maintaining any link data. This makes three things possible:
 
-- List every branch and merged pull request for a plan.
+- List every branch for a plan, including branches that have since been deleted.
 - Find the plan for a branch without grepping, so a new session started on a branch gets its plan as context.
 - See which plan edits happened while a branch was being worked on.
 
-Links must survive squash merges and deleted branches, because that is how work lands in gazebo.
+Links must survive deleted branches, because gazebo squash-merges and deletes every branch. A link records the branch name and its last tip. It does not record the pull request or the squash commit (see Decisions).
 
 ## Constraints and findings
 
 - **Who edits the plan is unrelated to who does the work.** An orchestrator on the default branch usually edits the plan, and implementer subagents on work branches make the commits. So the link cannot be derived from plan edits. It has to be recorded from the work branch.
-- **Trailers on code commits do not survive.** All of the last 400 commits on gazebo's main branch are squash commits whose subject ends in `(#N)`, and the ones inspected use the pull request title and description as the message. The branch's own commit messages are discarded. The pull request number is the only durable handle on a squashed branch.
+- **Trailers on code commits do not survive.** All of the last 400 commits on gazebo's main branch are squash commits whose subject ends in `(#N)`, and the ones inspected use the pull request title and description as the message. The branch's own commit messages are discarded.
 - **Trailers on docs-branch commits work.** A prototype confirmed that `git log --format='%(trailers:key=Code-Branch,valueonly)' -- <doc>` and `git log --grep='^Code-Branch: <branch>$'` return the right commits, that empty commits can carry the trailers, and that both survive the `git rebase` that `apl sync` runs (git 2.50.1).
 - **A shared metadata file would conflict.** Every sync from every teammate would rewrite the same file. Commits on the docs branch only ever append, so they cannot conflict.
 - **Claude Code hooks fire for subagents.** Plugin `PostToolUse` hooks run for a subagent's tool calls, and the input includes `agent_id`. For file tools, `tool_input.file_path` is always absolute. Hooks accept an `if` field in permission-rule syntax, so a hook can be limited to paths under `.apl/` before any process starts. The documentation does not say what `cwd` is for a subagent running in its own worktree, so it was measured (see "Checks before writing code").
@@ -47,12 +47,7 @@ Code-Commit: 7112e56a...
 
 These link commits are empty: they change no files. One commit covers one branch, with one `Linked-Doc` trailer per doc linked to it. The docs branch log is the only source of truth for queries. Nothing is cached in a file.
 
-Later trailers on the same kind of commit record what happened to the branch:
-
-- `Code-PR: 21220` once the branch has a pull request.
-- `Code-Merged: <squash commit>` once that pull request is merged.
-- `Code-PR-State: closed` when the pull request is closed without merging.
-- `Unlinked-Doc: <doc>` when someone runs `apl unlink`.
+`apl unlink` writes a commit with an `Unlinked-Doc: <doc>` trailer.
 
 ### When a link is created
 
@@ -81,34 +76,16 @@ This needs no hook in the code repo, and it does not matter which session syncs.
 
 The Stop hook calls `syncPlans({ ifChanged: true })`, which today returns early when no doc changed. A new link commit must count as a change so that it gets pushed.
 
-### Resolving squash merges
-
-A link is unresolved until it has a `Code-Merged` or `Code-PR-State: closed` trailer. For each unresolved link, apl asks GitHub for the pull request whose head is the recorded tip:
-
-```
-gh pr list --head <branch> --state all --json number,state,headRefOid,mergeCommit
-```
-
-It matches on `headRefOid` rather than the branch name alone, because branch names get reused. The result is written back as a link commit, so each pull request is looked up at most once after it merges, and by one teammate for everyone.
-
-Resolution runs at three points:
-
-- Once per session, in the SessionStart hook after the pull. This picks up pull requests that were opened or merged outside the session, for example merged in the GitHub web page.
-- Right after a pull request is created or merged in the session. A plugin `PostToolUse` hook on Bash, with `if` rules for `gh pr create` and `gh pr merge`, runs `apl hook pr-changed`, which resolves the current branch only. This records `Code-PR` in the same turn the pull request is opened.
-- On demand, with `apl links --resolve`.
-
-It never runs in the Stop hook, which fires every turn. A link with an open pull request stays unresolved, so it is checked again at each session start until the pull request merges or closes. When `gh` is missing or not signed in, resolution is skipped without an error, and the link still shows its branch name and last tip.
-
 ### Reading links
 
-- `apl links [<doc>] [--branch <name>] [--json]` lists links. For a doc: each branch, its last tip, its pull request, and its squash commit. For a branch: its docs. With neither, it lists every link. `--branch` without a name means the current branch.
+- `apl links [<doc>] [--branch <name>] [--json]` lists links. For a doc: each branch and its last tip. For a branch: its docs. With neither, it lists every link. `--branch` without a name means the current branch.
 - `apl show --branch [<name>]` prints every doc linked to a branch, defaulting to the current branch. This is the command for starting a session on a branch with its plan as context. Each doc starts with its usual metadata header, and `--outline` and `--section` apply to each.
 - `apl ls --branch <name>` filters the list to docs linked to that branch.
-- `apl show --json` and `apl ls --json` gain a `links` field. Existing fields do not change.
+- `apl show --json` and `apl ls --json` gain a `links` field with each link's branch and tip. Existing fields do not change.
 - The SessionStart hook prints one line per doc linked to the current branch, next to the open handoffs it already prints.
 - `apl log` hides link commits by default and shows them with `--links`. `apl log <file>` already excludes them, because they change no files.
 
-Plan edits made during a branch's lifetime are derived, not recorded: they are the docs commits that touch the linked doc between the branch's first link commit and its `Code-Merged` commit. `apl links <doc> --branch <name> --edits` prints them.
+Plan edits made while a branch is worked on are derived, not recorded: they are the docs commits that touch the linked doc after the branch's first link commit. `apl links <doc> --branch <name> --edits` prints them. Nothing records when a branch is merged, so the list has no end.
 
 ### Plugin and skill
 
@@ -131,16 +108,12 @@ All three were done on 2026-11-10.
 
 ### Pull requests
 
-Four, in order:
-
-All four are open and stacked, each based on the one before: `branch-linking-storage` (#1), `branch-linking-auto` (#2), `branch-linking-reading` (#3), `branch-linking-pull-requests` (#4). Merge them in order.
+Three are open and stacked, each based on the one before: `branch-linking-storage` (#1), `branch-linking-auto` (#2), `branch-linking-reading` (#3). Merge them in order. A fourth, pull request lookup (#4, `branch-linking-pull-requests`), was built and closed without merging.
 
 1. **Storage and explicit linking.** Add `src/lib/links.ts`: read and write `branch.<name>.apl-doc`, find the default branch, write link commits through `execGit`, and parse the docs log into links. Add `apl link`, `apl unlink`, and `apl links`. Make `commit` and `sync` record new links and moved tips, and make the `ifChanged` path push them.
 2. **Automatic linking.** Link from `apl show`. Add `apl hook doc-touched` and the plugin's `PostToolUse` entries. Update `SKILL.md` and check it with `claude plugin validate .`.
 3. **Reading links.** Add `show --branch`, `ls --branch`, the `links` JSON field, `log --links`, `links --edits`, the SessionStart line, and shell completion for branch names.
-4. **Pull request resolution.** Add the `gh` lookup, `apl links --resolve`, the once-per-session run in the SessionStart hook, and `apl hook pr-changed` with its plugin `PostToolUse` entries.
-
-Each pull request updates the README. Tests go in a new `linking` workflow file and drive the real CLI: they use `createSecondaryCheckout` for work branches and put a fake `gh` script on `PATH` for resolution.
+Each pull request updates the README. Tests are in `test/linking*.test.ts` and drive the real CLI.
 
 ## Risks
 
@@ -148,7 +121,7 @@ Each pull request updates the README. Tests go in a new `linking` workflow file 
 - **`apl sync` does not commit when no remote is configured.** It returns before committing, so in a repo without a remote the Stop hook never records links. `apl commit` and `apl links` do.
 - **An unlink can be undone by a teammate's clone.** `apl unlink` removes the working link only in the clone where it runs. If a teammate's clone still has it, their next sync links the doc again.
 - **A branch is deleted before any sync records it.** The working link disappears with the branch. The Stop hook syncs every turn, so this needs a branch to be created, linked, and deleted within one turn.
-- **Resolution depends on GitHub and `gh`.** Without them a link keeps its branch name and tip but never gets a squash commit. Another forge would need its own lookup.
+- **A reused branch name continues its old link.** Nothing marks a branch as finished, so a later branch with the same name adds to the earlier link instead of starting a new one.
 - **Link commits add volume to the docs log.** There is at most one per linked branch per sync, and only when the tip moved. Queries filter with `--grep='^Code-Branch: '` in a single `git log` call, which is fast at gazebo's size. Measure it there before the third pull request.
 - **Git version differences.** Trailer formatting (`%(trailers:key=...)`) and the handling of empty commits during a rebase vary across git versions, and CI runs a different git than macOS.
 
@@ -157,6 +130,7 @@ Each pull request updates the README. Tests go in a new `linking` workflow file 
 - **Every doc type links.** Handoffs and research belong to a branch as much as plans do.
 - **`apl show --branch` prints every linked doc**, not only the most recent one.
 
+- **No pull request or squash commit in the record.** A lookup through the `gh` CLI was built (#4) and dropped on 2026-11-10. It tied apl to GitHub and made session start wait on up to 20 `gh` calls. The recorded branch name is enough for a tool to run `gh pr list --head <branch> --state all` when it needs the pull request. A git-only alternative exists if this is wanted later: for each new commit on the default branch, check whether merging the recorded tip into its parent gives the same tree.
 - **No trailers on code commits.** Squash merges discard them, and they would put apl metadata in the team's commit messages.
 - **No metadata file on the docs branch.** It would conflict on concurrent syncs and would be one more file for agents to damage.
 - **No `branches:` field in plan frontmatter.** It cannot record tips or pull requests without constant churn in files agents are editing.
