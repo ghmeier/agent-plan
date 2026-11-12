@@ -1,6 +1,6 @@
 # agent-plan
 
-Version-controlled plan storage for agent-driven coding workflows, without cluttering your main repo.
+Enhance document-driven agentic coding workflows with any coding harness by automagically syncing your documentation across worktrees and checkouts without cluttering your codebase.
 
 ## Quick Start
 
@@ -20,19 +20,23 @@ apl add notes.md
 # View docs
 apl ls
 apl show plan/auth-rewrite.md
+
+# Search docs
 apl search auth rewrite
 
-# Sync with teammates
+# Sync with remote
 apl sync
 ```
 
 ## Why?
 
-AI coding workflows generate a steady stream of research docs, plans, and handoffs. Committing them to your main repo creates churn and review burden on files that are just markdown. Keeping them local means they can't be shared with teammates or survive a fresh clone. agent-plan solves this by storing them on a separate git branch with its own history, synced with a single command, so there's never a question of whether or how to commit one.
+Picture this: you're building dozens of new features, each with it's own plan, research, and handoff documents to share context across sessions. This creates a steady stream of markdown documents that are ideally at least organized in a folder, but could end up in all sorts of dusty locations on your laptop, in your sandbox, or in some data center somewhere. You're not the only one; the rest of your team is doing the same thing.
 
-## How It Works
+What do you do with all this text? On one hand, it's useful when you forget what you worked on a month ago (or last week, let's be honest). On the other, it's such a chore to get everyone to agree on which updates to commit, where to put them, and how to keep them organized. If you make the LLM do it, you'll end up with slight differences when it just decides to ignore your instructions. You'll probably end up in an annoying split-state where _some_ documents get faithfully updated, others are left _partially_ updated, and more are just left unstaged until they're inevitably deleted.
 
-Files live on an independent orphan branch (default: `apl`), checked out as a git worktree at `.apl` in the main checkout. The plan folder is visible in every other checkout (from `git worktree add`) via a symlink to `.apl`. Agents and editors read and write files under `.apl/` with normal file I/O. `apl commit` stages and commits whatever changed. Because the branch is pushed to the same remote as your code, teammates get docs automatically.
+Agent-plan solves the documentation problem by building it into your coding workflow. Documents are stored on a separate branch where they're isolated from the rest of your code, symlinked across all your worktrees so they're still easy to access in-context, and automatically synced with the rest of the team.
+
+There's no more deciding where and when things are committed: they just are. Even better, updates are synced immediately so sharing projects with the team is a cinch. Because it's all managed in git, documents are tied to the implementation branch and you (or your LLM) can dig into the blame for each document update if you're into that kind of thing. As an added bonus, since documents are managed deterministically, you can create templates that are always applied and easily searchable by keyword, date, or your ticketing system's ids.
 
 ## Configuration
 
@@ -40,11 +44,11 @@ Files live on an independent orphan branch (default: `apl`), checked out as a gi
 
 Documents can be automatically grouped into folders, filtered, and have custom statuses using document types. By default agent-plan has the following:
 
-| Type | Statuses |
-| --- | --- |
-| `plan` | `draft`, `active`, `completed`, `archived` |
-| `research` | `draft`, `final`, `archived` |
-| `handoff` | `open`, `picked-up`, `closed` |
+| Type       | Statuses                                   |
+| ---------- | ------------------------------------------ |
+| `plan`     | `draft`, `active`, `completed`, `archived` |
+| `research` | `draft`, `final`, `archived`               |
+| `handoff`  | `open`, `picked-up`, `closed`              |
 
 Document types are configurable by creating `config.json` at the root of the docs branch (`.apl` by default). For example:
 
@@ -53,7 +57,10 @@ Document types are configurable by creating `config.json` at the root of the doc
   "types": {
     "plan": { "description": "Implementation plans" },
     "handoff": { "statuses": ["open", "picked-up", "closed"] },
-    "adr": { "description": "Decision records", "statuses": ["proposed", "accepted", "superseded"] }
+    "adr": {
+      "description": "Decision records",
+      "statuses": ["proposed", "accepted", "superseded"]
+    }
   }
 }
 ```
@@ -86,54 +93,36 @@ Supported fields:
 
 ## Linking Docs to Branches
 
-A doc can be linked to the code branches that implement it, so you can go from a plan to its branches and from a branch to its plan without searching.
+For easier cross-referencing and integration with other tooling, docs can be manually (or automagically) linked to branches. That allows you to later track which commits related to a given plan.
 
 ```bash
-# On a work branch: link a doc to it
+# Link plan/billing to the current branch.
 apl link plan/billing
 
-# From anywhere: link a doc to a named branch
+# Link plan/billing to a specific branch.
 apl link plan/billing --branch feature/billing
 
-# Every link, the links of one doc, or the docs of one branch
+# List all links.
 apl links
-apl links plan/billing
-apl links --branch feature/billing   # no name means the current branch
 
+# List all branches linked to plan/billing.
+apl links plan/billing
+
+# List all documents linked to a specific branch.
+apl links --branch feature/billing
+
+# Remove a link.
 apl unlink plan/billing --branch feature/billing
 ```
 
-The link is stored in two places, and neither is a file:
+Links are stored in two ways:
 
-- **In the code repo's git config**, as `branch.<name>.apl-doc`. Every checkout of your clone shares it, and git removes it when the branch is deleted. It tells apl which branches to watch.
-- **On the docs branch**, as an empty commit whose trailers (`Linked-Doc`, `Code-Branch`, `Code-Commit`) name the doc, the branch, and the branch's tip. This is what `apl links` reads. It is synced to teammates and stays after the branch is deleted.
-
-Every `apl commit` and `apl sync` records a new commit for each linked branch whose tip has moved, from any checkout. A session on the default branch therefore records the commits an implementer made on a work branch. The default branch and the docs branch can't be linked.
-
-Most links are made for you. Running `apl show` on a doc from a work branch links it to that branch, and so does the Claude Code plugin: its hook runs after the agent reads, edits, or writes a file under `.apl/` and links that doc to the branch of the checkout the agent works in. This only writes the git config part, so it adds no commit and never fails the read. The next `apl commit` or `apl sync` records it on the docs branch. Use `apl link` for work that never opens the doc itself, such as an orchestrator that pastes a section of a plan into a subagent's prompt.
-
-To read links back:
-
-```bash
-# Print every doc linked to a branch (the current branch when no name), for starting a session with its plan
-apl show --branch
-apl show --branch feature/billing --section Rollout   # --outline, --section, and --raw apply to each doc
-
-# List only the docs linked to a branch
-apl ls --branch feature/billing
-
-# Docs-branch edits to a doc since it was linked to the branch
-apl links plan/billing --branch feature/billing --edits
-
-# Link commits are hidden from the log unless asked for
-apl log --links
-```
-
-`show --json` and `ls --json` include a `links` array for each doc, with each linked branch's `branch` and `commit`. These commands only read: they never record links.
+- **In the repo's git config**, as `branch.<name>.apl-doc`.
+- **On the agent-plan branch**, as an empty commit with commented `Linked-Doc`, `Code-Branch`, and `Code-Commit`.
 
 ## Agent Usage
 
-- **Normal file I/O**: agents read and write docs in `.apl/` directly, without shelling out to the CLI for every edit. `apl new` prints the path to write to.
+- **Normal file I/O**: agents read and write docs in `.apl/` directly. `apl new` creates a doc and returns it's path.
 - **Structured output**: `show`, `ls`, `search`, `links`, `log`, `diff`, `status`, `types`, and `new` support `--json`.
 
 ### Claude Code setup
@@ -173,8 +162,7 @@ codex plugin marketplace add ghmeier/agent-plan
 codex plugin add agent-plan@agent-plan
 ```
 
-Codex skips plugin hooks until you trust them, so run `/hooks` in a Codex session and trust the two agent-plan hooks. Codex can't wake the agent from a background hook, so if publishing doc edits after a turn hits a conflict, it shows up at the next session start instead of right away. Run `codex plugin marketplace upgrade` to pick up plugin updates.
-
+Codex skips plugin hooks until you trust them, so run `/hooks` in a Codex session and trust the two agent-plan hooks.
 
 ## Shell Completion
 
@@ -183,14 +171,7 @@ Tab completion is available for bash, zsh, and fish:
 ```bash
 # Add it to your shell config automatically
 apl completion --install
-
-# Or print the script and wire it up yourself
-apl completion zsh    # eval "$(apl completion zsh)" in ~/.zshrc
-apl completion bash   # eval "$(apl completion bash)" in ~/.bashrc
-apl completion fish   # apl completion fish | source in ~/.config/fish/config.fish
 ```
-
-Open a new shell, or source the rc file, for completion to take effect.
 
 ## Development
 
@@ -203,7 +184,7 @@ bun run lint:fix    # auto-fix lint and formatting issues
 bun run src/index.ts --help
 ```
 
-## Install / Build
+### Install / Build
 
 Install the latest release globally with Bun, which puts `apl` on `PATH` (in `~/.bun/bin`). Run the same command to update:
 

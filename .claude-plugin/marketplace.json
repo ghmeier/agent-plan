@@ -6,7 +6,7 @@
     {
       "name": "agent-plan",
       "source": "./plugins/agent-plan",
-      "description": "Skill and hooks for storing plans, research, and handoffs with apl"
+      "description": "Skill and hooks for storing agent planning documents with apl"
     }
   ]
 }

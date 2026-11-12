@@ -22,7 +22,10 @@ export interface AddOptions {
  * Copies one or more files into `.apl/` at their repo-relative paths,
  * stamps frontmatter timestamps, then commits from inside the worktree.
  */
-export async function addPlans(files: string[], options: AddOptions = {}): Promise<void> {
+export async function addPlans(
+  files: string[],
+  options: AddOptions = {},
+): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
@@ -48,7 +51,8 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
       throw new FileNotFoundError(file);
     }
 
-    const planPath = typePrefix + (await resolvePlanPath(repoRoot, absolutePath));
+    const planPath =
+      typePrefix + (await resolvePlanPath(repoRoot, absolutePath));
     const destPath = path.join(storeDir, planPath);
     const content = stampTimestamps(await diskFile.text());
 
@@ -64,7 +68,7 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
     storeDir,
   );
   if (unchanged === 0) {
-    info("Already up to date; nothing to commit");
+    info("Nothing to commit");
     return;
   }
 
@@ -79,7 +83,7 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
     throw new Error(`git commit failed: ${commit.stderr.trim()}`);
   }
 
-  success(`Added ${planPaths.length} file(s) to docs`);
+  success(`Added ${planPaths.length} file(s)`);
   for (const planPath of planPaths) {
     console.log(`  ${planPath}`);
   }
@@ -92,8 +96,16 @@ export function registerAdd(program: Command): void {
     .argument("<file>", "file to add")
     .argument("[files...]", "additional files to add")
     .option("-m, --message <msg>", "custom commit message")
-    .option("--type <type>", "store the files under this doc type's directory")
-    .action(async (file: string, files: string[], options: { message?: string; type?: string }) => {
-      await withStoreLock(await findRepoRoot(), () => addPlans([file, ...files], options));
-    });
+    .option("--type <type>", "store the files with this type")
+    .action(
+      async (
+        file: string,
+        files: string[],
+        options: { message?: string; type?: string },
+      ) => {
+        await withStoreLock(await findRepoRoot(), () =>
+          addPlans([file, ...files], options),
+        );
+      },
+    );
 }
