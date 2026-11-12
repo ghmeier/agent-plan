@@ -54,7 +54,7 @@ describe("apl add", () => {
     const result = await apl(repo.dir, ["add", "plan.md"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Added 1 file(s) to docs");
+    expect(result.stdout).toContain("Added 1 file(s)");
     expect(await showRaw(repo, "plan.md")).toBe("# Plan\n");
     expect(await planLogMessages(repo, ["-n", "1"])).toEqual(["Add plan.md"]);
   });
@@ -141,7 +141,7 @@ describe("apl add", () => {
     const result = await apl(repo.dir, ["add", "plan.md"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("nothing to commit");
+    expect(result.stdout).toContain("Nothing to commit");
     expect(await planLogMessages(repo)).toEqual(["Add plan.md", "Initialize docs"]);
   });
 
@@ -149,7 +149,9 @@ describe("apl add", () => {
     await using repo = await createInitializedRepo();
     await Bun.write(join(repo.dir, "plan.md"), "# Plan\n");
 
-    const add = await apl(repo.dir, ["add", "plan.md"], { env: { GIT_AUTHOR_DATE: "not a date" } });
+    const add = await apl(repo.dir, ["add", "plan.md"], {
+      env: { GIT_AUTHOR_DATE: "not a date" },
+    });
 
     expect(add.exitCode).not.toBe(0);
     expect(await git(repo.storeDir, ["diff", "--cached", "--name-only"])).toBe("");
@@ -230,7 +232,7 @@ describe("editing plans in .apl/ and committing", () => {
 
     const result = await apl(repo.dir, ["commit"]);
 
-    expect(result.stderr).toContain("Not committing files over 1 MB: data.json");
+    expect(result.stderr).toContain("Files over 1 MB are excluded by default: data.json");
     expect(await git(repo.storeDir, ["ls-files"])).toBe("notes.md");
     expect(await Bun.file(join(repo.storeDir, "data.json")).exists()).toBe(true);
   });
