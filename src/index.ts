@@ -27,7 +27,7 @@ const program = new Command();
 
 program
   .name("apl")
-  .description("Version-controlled storage and syncing for agent-written docs")
+  .description("Save, sync, and search your agent's plans automatically")
   .version(pkg.version)
   .option("--no-color", "Disable colored output");
 

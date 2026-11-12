@@ -1,5 +1,5 @@
 {
-  "description": "Pull teammates' docs and show open handoffs at session start; publish doc edits in the background when a turn ends; link a doc to the work branch when a session reads or edits it. All do nothing in repos without an apl docs branch.",
+  "description": "Pull teammates' docs and show open handoffs at session start. Publish doc edits in the background when a turn ends. Link docs to the work branch when a session reads or edits it.",
   "hooks": {
     "SessionStart": [
       {
