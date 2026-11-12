@@ -22,10 +22,7 @@ export interface AddOptions {
  * Copies one or more files into `.apl/` at their repo-relative paths,
  * stamps frontmatter timestamps, then commits from inside the worktree.
  */
-export async function addPlans(
-  files: string[],
-  options: AddOptions = {},
-): Promise<void> {
+export async function addPlans(files: string[], options: AddOptions = {}): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
   const repoRoot = await findRepoRoot(cwd);
   const config = await readConfig(repoRoot);
@@ -51,8 +48,7 @@ export async function addPlans(
       throw new FileNotFoundError(file);
     }
 
-    const planPath =
-      typePrefix + (await resolvePlanPath(repoRoot, absolutePath));
+    const planPath = typePrefix + (await resolvePlanPath(repoRoot, absolutePath));
     const destPath = path.join(storeDir, planPath);
     const content = stampTimestamps(await diskFile.text());
 
@@ -97,15 +93,7 @@ export function registerAdd(program: Command): void {
     .argument("[files...]", "additional files to add")
     .option("-m, --message <msg>", "custom commit message")
     .option("--type <type>", "store the files with this type")
-    .action(
-      async (
-        file: string,
-        files: string[],
-        options: { message?: string; type?: string },
-      ) => {
-        await withStoreLock(await findRepoRoot(), () =>
-          addPlans([file, ...files], options),
-        );
-      },
-    );
+    .action(async (file: string, files: string[], options: { message?: string; type?: string }) => {
+      await withStoreLock(await findRepoRoot(), () => addPlans([file, ...files], options));
+    });
 }

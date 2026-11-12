@@ -23,8 +23,7 @@ async function unstageLargeFiles(storeDir: string): Promise<void> {
   );
   const large: string[] = [];
   for (const relPath of stdout.split("\0").filter(Boolean)) {
-    if (Bun.file(join(storeDir, relPath)).size > MAX_COMMITTED_FILE_BYTES)
-      large.push(relPath);
+    if (Bun.file(join(storeDir, relPath)).size > MAX_COMMITTED_FILE_BYTES) large.push(relPath);
   }
   if (large.length === 0) return;
 
@@ -48,9 +47,7 @@ async function stageAndStamp(storeDir: string): Promise<boolean> {
     storeDir,
   );
 
-  const stagedPaths = nameList
-    .split("\0")
-    .filter((p) => p.length > 0 && p.endsWith(".md"));
+  const stagedPaths = nameList.split("\0").filter((p) => p.length > 0 && p.endsWith(".md"));
 
   const toRestage: string[] = [];
 
@@ -71,10 +68,7 @@ async function stageAndStamp(storeDir: string): Promise<boolean> {
     await execGit(["add", "--", ...toRestage], storeDir);
   }
 
-  const { exitCode: diffExitCode } = await runGit(
-    ["diff", "--cached", "--quiet"],
-    storeDir,
-  );
+  const { exitCode: diffExitCode } = await runGit(["diff", "--cached", "--quiet"], storeDir);
   return diffExitCode !== 0;
 }
 
@@ -82,10 +76,7 @@ const MAX_PATHS_IN_MESSAGE = 3;
 
 /** Names the staged files, so `apl log` shows what each commit touched. */
 async function defaultMessage(storeDir: string): Promise<string> {
-  const { stdout } = await runGit(
-    ["diff", "--cached", "--name-only", "-z"],
-    storeDir,
-  );
+  const { stdout } = await runGit(["diff", "--cached", "--name-only", "-z"], storeDir);
   const paths = stdout.split("\0").filter(Boolean);
   const shown = paths.slice(0, MAX_PATHS_IN_MESSAGE).join(", ");
   const hidden = paths.length - MAX_PATHS_IN_MESSAGE;
@@ -103,9 +94,7 @@ export interface CommitOptions {
  * Commits pending changes in the store, then records linked code branches
  * that are new or have moved. Returns whether either made a commit.
  */
-export async function commitPlans(
-  options: CommitOptions = {},
-): Promise<boolean> {
+export async function commitPlans(options: CommitOptions = {}): Promise<boolean> {
   const repoRoot = await findRepoRoot(options.cwd);
   const config = await readConfig(repoRoot);
 
@@ -125,9 +114,7 @@ export async function commitPlans(
   if (!options.quiet) {
     if (hasChanges) success("Committed doc changes");
     if (recordedLinks > 0) {
-      success(
-        `Recorded links for ${recordedLinks} ${recordedLinks === 1 ? "branch" : "branches"}`,
-      );
+      success(`Recorded links for ${recordedLinks} ${recordedLinks === 1 ? "branch" : "branches"}`);
     }
     if (!hasChanges && recordedLinks === 0) info("Nothing to commit");
   }
