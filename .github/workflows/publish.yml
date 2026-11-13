@@ -75,4 +75,4 @@ jobs:
       # Authenticates with OIDC through npm trusted publishing, so no npm token
       # is stored in the repo, and npm attaches provenance automatically. The
       # bundle was built and tested above, so lifecycle scripts are skipped.
-      - run: npm publish --ignore-scripts
+      - run: npm stage publish --ignore-scripts
