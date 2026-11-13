@@ -21,6 +21,15 @@ if (!result.success || !result.metafile) {
   process.exit(1);
 }
 
+// A `node` shebang breaks `bun i -g` on machines without Node, so the bundle
+// starts with a line that sh runs and JavaScript ignores (a string, then a
+// comment), which picks Node when it's installed and Bun otherwise.
+const LAUNCHER =
+  '#!/bin/sh\n":" //; if command -v node >/dev/null 2>&1; then exec node "$0" "$@"; fi; exec bun "$0" "$@"\n';
+const bundlePath = join(outdir, "apl.js");
+const bundle = await Bun.file(bundlePath).text();
+await Bun.write(bundlePath, LAUNCHER + bundle.replace(/^#!.*\n/, ""));
+
 const bundled = new Set<string>();
 for (const input of Object.keys(result.metafile.inputs)) {
   const match = input.match(/node_modules\/((?:@[^/]+\/)?[^/]+)\//);
