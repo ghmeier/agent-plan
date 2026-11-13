@@ -2,7 +2,19 @@ import { chmod, cp, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
-const CLI_ENTRY = join(import.meta.dir, "..", "src", "index.ts");
+/**
+ * The command that runs the CLI under test. By default that's the source under
+ * Bun; `APL_TEST_DIST=1` runs the bundle from `bun run build` instead, which is
+ * what npm users install. It runs the file itself, so its launcher line picks
+ * the runtime: Node when it's on PATH, otherwise Bun. Node starts slower than
+ * Bun, and every test starts the CLI many times while the others run, so
+ * `test:dist` raises the default 5s timeout: on a 3-core CI runner tests took
+ * up to 15s.
+ */
+const CLI_COMMAND =
+  process.env.APL_TEST_DIST === "1"
+    ? [join(import.meta.dir, "..", "dist", "apl.js")]
+    : ["bun", join(import.meta.dir, "..", "src", "index.ts")];
 
 export interface CommandResult {
   stdout: string;
@@ -33,7 +45,10 @@ export async function removeScratchRoot(): Promise<void> {
  */
 const shimDir = join(scratchRoot, "bin");
 await mkdir(shimDir);
-await Bun.write(join(shimDir, "apl"), `#!/bin/sh\nexec bun "${CLI_ENTRY}" "$@"\n`);
+await Bun.write(
+  join(shimDir, "apl"),
+  `#!/bin/sh\nexec ${CLI_COMMAND.map((part) => `"${part}"`).join(" ")} "$@"\n`,
+);
 await chmod(join(shimDir, "apl"), 0o755);
 
 /**
@@ -89,7 +104,7 @@ export function apl(
   args: readonly string[],
   options: RunOptions = {},
 ): Promise<CommandResult> {
-  return run(["bun", CLI_ENTRY, ...args], cwd, options);
+  return run([...CLI_COMMAND, ...args], cwd, options);
 }
 
 /**

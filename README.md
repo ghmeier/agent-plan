@@ -5,8 +5,8 @@ Enhance document-driven agentic coding workflows with any coding harness by auto
 ## Quick Start
 
 ```bash
-# Install (requires Bun); run it again to update
-bun i -g @ghmeier/agent-plan@latest
+# Install with your package manager.
+npm i -g @ghmeier/agent-plan@latest
 
 # Initialize in your repo
 apl init
@@ -37,6 +37,18 @@ What do you do with all this text? On one hand, it's useful when you forget what
 Agent-plan solves the documentation problem by building it into your coding workflow. Documents are stored on a separate branch where they're isolated from the rest of your code, symlinked across all your worktrees so they're still easy to access in-context, and automatically synced with the rest of the team.
 
 There's no more deciding where and when things are committed: they just are. Even better, updates are synced immediately so sharing projects with the team is a cinch. Because it's all managed in git, documents are tied to the implementation branch and you (or your LLM) can dig into the blame for each document update if you're into that kind of thing. As an added bonus, since documents are managed deterministically, you can create templates that are always applied and easily searchable by keyword, date, or your ticketing system's ids.
+
+## Install
+
+```bash
+npm i -g @ghmeier/agent-plan@latest
+```
+
+apl runs on macOS and Linux, and needs supports Node 22+ or Bun (`bun i -g` works too). Without Node, install the standalone binary from the [latest release](https://github.com/ghmeier/agent-plan/releases):
+
+```bash
+curl -fsSLO https://github.com/ghmeier/agent-plan/releases/latest/download/install.sh && less install.sh && sh install.sh
+```
 
 ## Configuration
 
@@ -184,31 +196,21 @@ bun run lint:fix    # auto-fix lint and formatting issues
 bun run src/index.ts --help
 ```
 
-### Install / Build
-
-Install the latest release globally with Bun, which puts `apl` on `PATH` (in `~/.bun/bin`). Run the same command to update:
+Development uses Bun; the published CLI runs on Node.
 
 ```bash
-bun i -g @ghmeier/agent-plan@latest
-apl --version
+bun run build          # bundles dist/apl.js, the Node CLI npm publishes
+bun run test:dist      # runs the tests against dist/apl.js under Node
+bun run build:binary   # compiles a standalone dist/apl
 ```
 
-For local development, link the CLI globally from a clone instead:
+To link the CLI globally from a clone:
 
 ```bash
 bun install && bun link
 apl --help
 ```
 
-To produce a standalone binary that runs without Bun installed:
+### Releasing
 
-```bash
-bun run build          # compiles dist/apl for the current platform
-./dist/apl --help
-```
-
-To cross-compile binaries for macOS (arm64, x64) and Linux (x64) in one step:
-
-```bash
-bun run build:all      # writes dist/apl-darwin-arm64, dist/apl-darwin-x64, dist/apl-linux-x64
-```
+Bump `version` in `package.json` and push a matching `v*` tag. `publish.yml` creates a GitHub release with attested binaries and publishes to npm via [trusted publishing](https://docs.npmjs.com/trusted-publishers) (configure it on npmjs.com for workflow `publish.yml`, environment `release`).

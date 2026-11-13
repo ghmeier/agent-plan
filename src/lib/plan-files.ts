@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -9,8 +10,7 @@ export function isDocPath(relPath: string): boolean {
 /** Recursively lists .md files under dir, returning repo-relative posix paths. */
 export async function listMarkdownFiles(dir: string, base = dir): Promise<string[]> {
   const results: string[] = [];
-  // biome-ignore lint/suspicious/noExplicitAny: bun types differ from Node types for Dirent
-  let entries: any[];
+  let entries: Dirent[];
   try {
     entries = await readdir(dir, { withFileTypes: true });
   } catch {

@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
@@ -11,6 +11,7 @@ import {
 } from "../lib/doc-types";
 import { AgentPlanError, FileExistsError } from "../lib/errors";
 import { setFrontmatterFields, stampTimestamps, today } from "../lib/frontmatter";
+import { fileExists } from "../lib/fs";
 import { runGit } from "../lib/git";
 import { findRepoRoot, getStoreLink } from "../lib/paths";
 import { ensureStore } from "../lib/worktree";
@@ -71,7 +72,7 @@ export async function newDoc(typeName: string, name: string, options: NewOptions
 
   const docPath = `${type.name}/${normalizeDocName(name, type.name)}`;
   const destPath = path.join(storeDir, docPath);
-  if (await Bun.file(destPath).exists()) {
+  if (await fileExists(destPath)) {
     throw new FileExistsError(docPath);
   }
 
@@ -90,7 +91,7 @@ export async function newDoc(typeName: string, name: string, options: NewOptions
   content = stampTimestamps(content);
 
   await mkdir(path.dirname(destPath), { recursive: true });
-  await Bun.write(destPath, content);
+  await writeFile(destPath, content);
 
   // The path through the checkout's `.apl` link, not the store under `.git/`,
   // so editors and agents open it where users expect it.

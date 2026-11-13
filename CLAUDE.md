@@ -1,6 +1,6 @@
 # agent-plan (`apl`)
 
-A Bun + TypeScript CLI that stores agent-written markdown (plans, research, handoffs) on an orphan git branch (`apl`), so it never touches the code branch. See README.md for user-facing behavior; keep it in sync when commands or flags change.
+A TypeScript CLI, developed with Bun and published for Node, that stores agent-written markdown (plans, research, handoffs) on an orphan git branch (`apl`), so it never touches the code branch. See README.md for user-facing behavior; keep it in sync when commands or flags change.
 
 ## Commands
 
@@ -10,11 +10,12 @@ bun test test/sync.test.ts -t "conflicting"   # one file or test name
 bun run typecheck        # tsc --noEmit
 bun run lint             # biome check; lint:fix to autoformat
 bun src/index.ts <cmd>   # run the CLI from source
+bun run test:dist        # build dist/apl.js and run the tests against it under Node
 ```
 
 Run all three (test, typecheck, lint) before calling work done.
 
-Releases are published to npm as `@ghmeier/agent-plan` by `.github/workflows/publish.yml` when a `v*` tag is pushed; see README "Releasing". CI runs on Linux, where git versions can differ from local macOS, so be careful with git behavior that varies across versions.
+Releases are published to npm as `@ghmeier/agent-plan`, and as standalone binaries on a GitHub release, by `.github/workflows/publish.yml` when a `v*` tag is pushed; see README "Releasing". The npm package is `dist/apl.js`, a single Node bundle built by `scripts/build.ts` with no runtime dependencies, so every package in `package.json` is a devDependency. `install.sh` installs a release binary; keep it POSIX `sh`. Workflow actions are locked in `.github/workflows/actions.lock` by [`gh actions-lock`](https://github.com/github/gh-actions-lock); rerun it after changing any `uses:`, and the `verify-lockfile` workflow fails CI if you don't. CI runs on Linux, where git versions can differ from local macOS, so be careful with git behavior that varies across versions.
 
 ## Layout
 
@@ -32,12 +33,12 @@ Releases are published to npm as `@ghmeier/agent-plan` by `.github/workflows/pub
 
 ## Conventions
 
-- Git calls go through `runGit` / `execGit` in `src/lib/git.ts`, never a git library or a direct `Bun.spawn`. Those helpers set `APL_INTERNAL`, which the auto-commit hook checks so apl's own commits don't trigger it. `.apl` is added to `<git-common-dir>/info/exclude`, not `.gitignore`.
+- Git calls go through `runGit` / `execGit` in `src/lib/git.ts`, never a git library or a direct `spawn`. Those helpers set `APL_INTERNAL`, which the auto-commit hook checks so apl's own commits don't trigger it. `.apl` is added to `<git-common-dir>/info/exclude`, not `.gitignore`.
 - User-facing failures throw `AgentPlanError` (or a subclass in `src/lib/errors.ts`) with an actionable message; `index.ts` maps it to an exit code. Anything else exits 2 as "Unexpected error".
 - Print through `src/lib/output.ts` (`success`, `warn`, `info`, `error`) so `NO_COLOR` / `--no-color` is respected. Read commands support `--json`; keep that output stable because agents parse it.
 - Compare paths with `realpath` first. On macOS `/var` and `/tmp` are symlinks to `/private/...`, so plain string comparison of paths gives false mismatches.
 - No migration code for old layouts: the tool is pre-release.
-- Prefer `Bun.file`, `Bun.write`, and `bun:test` over Node or npm equivalents. Use `bun`/`bunx`, not `node`/`npx`.
+- `src/` runs on Node 22+, so it uses `node:` modules, never `Bun` APIs (lint enforces this). File helpers are in `src/lib/fs.ts`. Tests and `scripts/` run under Bun and use `Bun.*` and `bun:test` freely. Use `bun`/`bunx` for development, not `npm`/`npx`.
 
 ## Tests
 

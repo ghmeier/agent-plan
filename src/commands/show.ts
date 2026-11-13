@@ -5,6 +5,7 @@ import { readConfig } from "../lib/config";
 import { readDocTypes, typeOf, withValidStatus } from "../lib/doc-types";
 import { AgentPlanError, FileNotFoundError } from "../lib/errors";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
+import { fileExists, readTextIfExists } from "../lib/fs";
 import { runGit } from "../lib/git";
 import { findHeadings, findSections, type Heading, type Section } from "../lib/headings";
 import {
@@ -35,11 +36,13 @@ async function readFromHistory(storeDir: string, ref: string, planPath: string):
 }
 
 async function readFromWorktree(storeDir: string, planPath: string): Promise<string> {
-  const file = Bun.file(join(storeDir, planPath));
-  if (await file.exists()) return file.text();
+  const content = await readTextIfExists(join(storeDir, planPath));
+  if (content !== null) return content;
 
-  const withExtension = Bun.file(join(storeDir, `${planPath}.md`));
-  if (!planPath.endsWith(".md") && (await withExtension.exists())) return withExtension.text();
+  if (!planPath.endsWith(".md")) {
+    const withExtension = await readTextIfExists(join(storeDir, `${planPath}.md`));
+    if (withExtension !== null) return withExtension;
+  }
 
   if ((await stat(join(storeDir, planPath)).catch(() => null))?.isDirectory()) {
     throw new AgentPlanError(
@@ -190,7 +193,7 @@ export async function showBranchDocs(options: ShowOptions, cwd?: string): Promis
   const docs: string[] = [];
   for (const doc of currentLinkOfBranch(links, branch)?.docs ?? []) {
     // A doc can be deleted after it was linked.
-    if (await Bun.file(join(storeDir, doc)).exists()) docs.push(doc);
+    if (await fileExists(join(storeDir, doc))) docs.push(doc);
   }
   if (docs.length === 0) {
     throw new AgentPlanError(

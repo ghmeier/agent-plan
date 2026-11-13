@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "command -v apl >/dev/null 2>&1 || { echo 'The apl CLI is not installed, so docs in .apl/ are unavailable. Tell the user to install it with: bun i -g @ghmeier/agent-plan@latest'; exit 0; }; apl hook session-start"
+            "command": "command -v apl >/dev/null 2>&1 || { echo 'The apl CLI is not installed, so docs in .apl/ are unavailable. Tell the user to install it with: npm i -g @ghmeier/agent-plan (see https://github.com/ghmeier/agent-plan#install for other options)'; exit 0; }; apl hook session-start"
           }
         ]
       }

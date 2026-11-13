@@ -11,6 +11,7 @@ import {
   STORE_CONFIG_FILE,
 } from "../lib/doc-types";
 import { parseFrontmatter } from "../lib/frontmatter";
+import { readText } from "../lib/fs";
 import { branchExists, runGit } from "../lib/git";
 import { findRepoRoot, getStoreDir } from "../lib/paths";
 import { isDocPath, listMarkdownFiles } from "../lib/plan-files";
@@ -82,7 +83,7 @@ async function readTagsFromWorktree(storeDir: string): Promise<Set<string>> {
   const files = await listMarkdownFiles(storeDir);
   for (const f of files) {
     try {
-      const content = await Bun.file(join(storeDir, f)).text();
+      const content = await readText(join(storeDir, f));
       const { meta } = parseFrontmatter(content);
       for (const tag of meta.tags ?? []) tags.add(tag);
     } catch {

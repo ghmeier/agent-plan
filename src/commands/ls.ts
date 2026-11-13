@@ -4,6 +4,7 @@ import { readConfig } from "../lib/config";
 import { findType, readDocTypes, typeOf, withValidStatus } from "../lib/doc-types";
 import { AgentPlanError } from "../lib/errors";
 import { type PlanMeta, parseFrontmatter } from "../lib/frontmatter";
+import { readText } from "../lib/fs";
 import { linksOfDoc, readRecordedLinks } from "../lib/links";
 import { colors, hint, info } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
@@ -57,7 +58,7 @@ export async function findDocs(storeDir: string, filters: DocFilters = {}): Prom
   const entries: PlanEntry[] = await Promise.all(
     allFiles.map(async (file) => {
       const type = typeOf(file, types);
-      const content = await Bun.file(join(storeDir, file)).text();
+      const content = await readText(join(storeDir, file));
       const meta = withValidStatus(parseFrontmatter(content).meta, type, file);
       return { file, type: type?.name ?? null, meta, content };
     }),

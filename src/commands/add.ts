@@ -1,10 +1,11 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { findType, readDocTypes } from "../lib/doc-types";
 import { FileNotFoundError, NotInitializedError } from "../lib/errors";
 import { stampTimestamps } from "../lib/frontmatter";
+import { readTextIfExists } from "../lib/fs";
 import { branchExists, execGit, runGit, SKIP_CODE_HOOKS } from "../lib/git";
 import { withStoreLock } from "../lib/lock";
 import { info, success } from "../lib/output";
@@ -42,18 +43,17 @@ export async function addPlans(files: string[], options: AddOptions = {}): Promi
 
   for (const file of files) {
     const absolutePath = path.resolve(cwd, file);
-    const diskFile = Bun.file(absolutePath);
-
-    if (!(await diskFile.exists())) {
+    const diskContent = await readTextIfExists(absolutePath);
+    if (diskContent === null) {
       throw new FileNotFoundError(file);
     }
 
     const planPath = typePrefix + (await resolvePlanPath(repoRoot, absolutePath));
     const destPath = path.join(storeDir, planPath);
-    const content = stampTimestamps(await diskFile.text());
+    const content = stampTimestamps(diskContent);
 
     await mkdir(path.dirname(destPath), { recursive: true });
-    await Bun.write(destPath, content);
+    await writeFile(destPath, content);
     planPaths.push(planPath);
   }
 
