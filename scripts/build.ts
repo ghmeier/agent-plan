@@ -23,9 +23,16 @@ if (!result.success || !result.metafile) {
 
 // A `node` shebang breaks `bun i -g` on machines without Node, so the bundle
 // starts with a line that sh runs and JavaScript ignores (a string, then a
-// comment), which picks Node when it's installed and Bun otherwise.
-const LAUNCHER =
-  '#!/bin/sh\n":" //; if command -v node >/dev/null 2>&1; then exec node "$0" "$@"; fi; exec bun "$0" "$@"\n';
+// comment), which picks Node when it's installed and Bun otherwise. sh never
+// gets past that line: it execs a runtime or exits. The lone `;` on the next
+// line ends the string's statement for JavaScript, so the bundle's first line
+// can't be parsed as a continuation of it.
+const LAUNCHER = [
+  "#!/bin/sh",
+  `":" //; if command -v node >/dev/null 2>&1; then exec node "$0" "$@"; fi; if command -v bun >/dev/null 2>&1; then exec bun "$0" "$@"; fi; echo "apl needs Node 22+ or Bun, and neither is on PATH" >&2; exit 127`,
+  ";",
+  "",
+].join("\n");
 const bundlePath = join(outdir, "apl.js");
 const bundle = await Bun.file(bundlePath).text();
 await Bun.write(bundlePath, LAUNCHER + bundle.replace(/^#!.*\n/, ""));

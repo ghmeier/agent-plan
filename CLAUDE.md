@@ -38,7 +38,7 @@ Releases are published to npm as `@ghmeier/agent-plan`, and as standalone binari
 - Print through `src/lib/output.ts` (`success`, `warn`, `info`, `error`) so `NO_COLOR` / `--no-color` is respected. Read commands support `--json`; keep that output stable because agents parse it.
 - Compare paths with `realpath` first. On macOS `/var` and `/tmp` are symlinks to `/private/...`, so plain string comparison of paths gives false mismatches.
 - No migration code for old layouts: the tool is pre-release.
-- `src/` runs on Node 20+, so it uses `node:` modules, never `Bun` APIs (lint enforces this). File helpers are in `src/lib/fs.ts`. Tests and `scripts/` run under Bun and use `Bun.*` and `bun:test` freely. Use `bun`/`bunx` for development, not `npm`/`npx`.
+- `src/` runs on Node 22+, so it uses `node:` modules, never `Bun` APIs (lint enforces this). File helpers are in `src/lib/fs.ts`. Tests and `scripts/` run under Bun and use `Bun.*` and `bun:test` freely. Use `bun`/`bunx` for development, not `npm`/`npx`.
 
 ## Tests
 

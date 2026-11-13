@@ -5,7 +5,7 @@ Enhance document-driven agentic coding workflows with any coding harness by auto
 ## Quick Start
 
 ```bash
-# Install (requires Node 20+ or Bun); run it again to update. See Install for other options.
+# Install (requires Node 22+ or Bun); run it again to update. See Install for other options.
 npm i -g @ghmeier/agent-plan@latest
 
 # Initialize in your repo
@@ -34,9 +34,9 @@ apl sync
 npm i -g @ghmeier/agent-plan@latest
 ```
 
-Needs Node 20+ or Bun (`bun i -g` works too). The package is one bundled file with no dependencies or install scripts, published from CI with [npm provenance](https://docs.npmjs.com/generating-provenance-statements).
+apl runs on macOS and Linux, and needs Node 22+ or Bun (`bun i -g` works too). The package is one bundled file with no dependencies or install scripts, published from CI with [npm provenance](https://docs.npmjs.com/generating-provenance-statements).
 
-Without Node, install a standalone binary (macOS and Linux) from the [latest release](https://github.com/ghmeier/agent-plan/releases). The install script verifies the binary's checksum, and its [build attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) when `gh` is logged in. Read it before running it:
+Without Node, install a standalone binary from the [latest release](https://github.com/ghmeier/agent-plan/releases). The install script verifies the binary's checksum, and its [build attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) when `gh` is logged in. Read it before running it:
 
 ```bash
 curl -fsSLO https://github.com/ghmeier/agent-plan/releases/latest/download/install.sh && less install.sh && sh install.sh

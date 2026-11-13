@@ -45,7 +45,7 @@ jobs:
         run: |
           bun run build
           mkdir -p release
-          for target in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
+          for target in darwin-arm64 darwin-x64 linux-arm64 linux-x64 linux-arm64-musl linux-x64-musl; do
             bun build src/index.ts --compile --target="bun-$target" --outfile "release/apl-$target"
           done
           ./release/apl-darwin-arm64 --version
@@ -58,10 +58,17 @@ jobs:
             release/apl-*
             release/install.sh
 
+      # On a rerun the release already exists, so replace its files instead.
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes release/*
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" --clobber release/*
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes release/*
+          fi
 
       # Authenticates with OIDC through npm trusted publishing, so no npm token
       # is stored in the repo, and npm attaches provenance automatically. The

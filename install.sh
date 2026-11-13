@@ -40,7 +40,9 @@ main() {
   base="https://github.com/$REPO/releases/download/$version"
 
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT INT TERM
+  trap 'rm -rf "$tmp"' EXIT
+  # Exiting runs the EXIT trap. Without this, sh would clean up and keep going.
+  trap 'exit 130' INT TERM
 
   say "Downloading apl $version for $target"
   download "$base/$asset" "$tmp/$asset"
@@ -55,6 +57,13 @@ main() {
   mv -f "$tmp/$asset" "$install_dir/apl.tmp.$$"
   mv -f "$install_dir/apl.tmp.$$" "$install_dir/apl"
   say "Installed apl $version to $install_dir/apl"
+
+  # The musl build links libstdc++, which base Alpine images don't include.
+  case "$target" in
+    *-musl)
+      [ -e /usr/lib/libstdc++.so.6 ] || [ -e /lib/libstdc++.so.6 ] ||
+        say "apl needs libstdc++, which isn't installed. On Alpine: apk add libstdc++" ;;
+  esac
 
   case ":$PATH:" in
     *":$install_dir:"*) ;;
@@ -82,6 +91,7 @@ detect_target() {
   case "$os" in
     Darwin) os=darwin ;;
     Linux) os=linux ;;
+    MINGW* | MSYS* | CYGWIN*) fail "apl doesn't support Windows" ;;
     *) fail "no prebuilt apl for $os. Install with npm instead: npm i -g @ghmeier/agent-plan" ;;
   esac
   case "$arch" in
@@ -94,7 +104,24 @@ detect_target() {
     [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)" = 1 ]; then
     arch=arm64
   fi
+  # Alpine and other musl-based Linux can't run the glibc build.
+  if [ "$os" = linux ] && is_musl; then
+    arch="$arch-musl"
+  fi
   printf '%s-%s\n' "$os" "$arch"
+}
+
+# Asks ldd which libc the system uses. Some glibc systems have the musl loader
+# installed too, so its presence is only checked when ldd is missing.
+is_musl() {
+  if command -v ldd >/dev/null 2>&1; then
+    ldd --version 2>&1 | grep -qi musl
+    return
+  fi
+  for loader in /lib/ld-musl-*; do
+    [ -e "$loader" ] && return 0
+  done
+  return 1
 }
 
 # HTTPS only, including redirects, with TLS 1.2 or later.
