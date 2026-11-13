@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_call:
+    inputs:
+      full-matrix:
+        description: Test the Node bundle on macOS and the oldest supported Node too
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,14 +27,15 @@ jobs:
       - run: bun run lint
       - run: bun test
 
-  # Runs the suite against the bundle npm users install, on the oldest and
-  # newest Node versions it supports.
+  # Runs the suite against the bundle npm users install. Pushes and pull
+  # requests test only the newest Node on Linux, to save runner time. Releases
+  # pass full-matrix to also test macOS and the oldest Node it supports.
   node:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        node: [22, 26]
+        os: ${{ fromJSON(inputs.full-matrix && '["ubuntu-latest", "macos-latest"]' || '["ubuntu-latest"]') }}
+        node: ${{ fromJSON(inputs.full-matrix && '[22, 26]' || '[26]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7.0.1
