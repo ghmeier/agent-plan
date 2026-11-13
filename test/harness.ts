@@ -5,7 +5,9 @@ import { basename, join } from "node:path";
 /**
  * The command that runs the CLI under test. By default that's the source under
  * Bun; `APL_TEST_DIST=1` runs the Node bundle from `bun run build` instead, which
- * is what npm users install.
+ * is what npm users install. Node starts slower than Bun, and every test starts
+ * the CLI many times while the others run, so `test:dist` raises the default
+ * 5s timeout: on a 3-core CI runner tests took up to 15s.
  */
 const CLI_COMMAND =
   process.env.APL_TEST_DIST === "1"
