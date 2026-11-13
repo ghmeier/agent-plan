@@ -5,7 +5,7 @@ Enhance document-driven agentic coding workflows with any coding harness by auto
 ## Quick Start
 
 ```bash
-# Install (requires Node 22+ or Bun); run it again to update. See Install for other options.
+# Install with your package manager.
 npm i -g @ghmeier/agent-plan@latest
 
 # Initialize in your repo
@@ -28,20 +28,6 @@ apl search auth rewrite
 apl sync
 ```
 
-## Install
-
-```bash
-npm i -g @ghmeier/agent-plan@latest
-```
-
-apl runs on macOS and Linux, and needs Node 22+ or Bun (`bun i -g` works too). The package is one bundled file with no dependencies or install scripts, published from CI with [npm provenance](https://docs.npmjs.com/generating-provenance-statements).
-
-Without Node, install a standalone binary from the [latest release](https://github.com/ghmeier/agent-plan/releases). The install script verifies the binary's checksum, and its [build attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) when `gh` is logged in. Read it before running it:
-
-```bash
-curl -fsSLO https://github.com/ghmeier/agent-plan/releases/latest/download/install.sh && less install.sh && sh install.sh
-```
-
 ## Why?
 
 Picture this: you're building dozens of new features, each with it's own plan, research, and handoff documents to share context across sessions. This creates a steady stream of markdown documents that are ideally at least organized in a folder, but could end up in all sorts of dusty locations on your laptop, in your sandbox, or in some data center somewhere. You're not the only one; the rest of your team is doing the same thing.
@@ -51,6 +37,18 @@ What do you do with all this text? On one hand, it's useful when you forget what
 Agent-plan solves the documentation problem by building it into your coding workflow. Documents are stored on a separate branch where they're isolated from the rest of your code, symlinked across all your worktrees so they're still easy to access in-context, and automatically synced with the rest of the team.
 
 There's no more deciding where and when things are committed: they just are. Even better, updates are synced immediately so sharing projects with the team is a cinch. Because it's all managed in git, documents are tied to the implementation branch and you (or your LLM) can dig into the blame for each document update if you're into that kind of thing. As an added bonus, since documents are managed deterministically, you can create templates that are always applied and easily searchable by keyword, date, or your ticketing system's ids.
+
+## Install
+
+```bash
+npm i -g @ghmeier/agent-plan@latest
+```
+
+apl runs on macOS and Linux, and needs supports Node 22+ or Bun (`bun i -g` works too). Without Node, install the standalone binary from the [latest release](https://github.com/ghmeier/agent-plan/releases):
+
+```bash
+curl -fsSLO https://github.com/ghmeier/agent-plan/releases/latest/download/install.sh && less install.sh && sh install.sh
+```
 
 ## Configuration
 
