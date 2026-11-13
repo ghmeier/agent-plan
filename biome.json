@@ -34,5 +34,24 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "Bun": "The published CLI runs on Node. Use node: modules here; Bun APIs are fine in tests and scripts."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

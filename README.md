@@ -5,8 +5,8 @@ Enhance document-driven agentic coding workflows with any coding harness by auto
 ## Quick Start
 
 ```bash
-# Install (requires Bun); run it again to update
-bun i -g @ghmeier/agent-plan@latest
+# Install (requires Node 20+); run it again to update. See Install for other options.
+npm i -g @ghmeier/agent-plan@latest
 
 # Initialize in your repo
 apl init
@@ -26,6 +26,42 @@ apl search auth rewrite
 
 # Sync with remote
 apl sync
+```
+
+## Install
+
+### npm (recommended)
+
+```bash
+npm i -g @ghmeier/agent-plan@latest
+```
+
+Needs Node 20 or later, and works with any npm-compatible package manager (`pnpm add -g`, `bun i -g`, and so on). The package is a single bundled file with no dependencies and no install scripts, so installing it runs nothing and pulls in nothing else. Releases are published from GitHub Actions with [npm provenance](https://docs.npmjs.com/generating-provenance-statements), shown on the [package's npm page](https://www.npmjs.com/package/@ghmeier/agent-plan), which links each version to the commit and workflow run that built it.
+
+### Standalone binary
+
+For macOS and Linux (x64 and arm64) without Node, each [GitHub release](https://github.com/ghmeier/agent-plan/releases) has prebuilt binaries. The install script picks the right one, checks it against the release's `SHA256SUMS`, and, when the [GitHub CLI](https://cli.github.com) is installed and logged in, verifies its [build attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) to prove it was built by this repo's release workflow. It installs to `~/.local/bin` without `sudo`.
+
+Download the script, read it, then run it:
+
+```bash
+curl -fsSLO https://github.com/ghmeier/agent-plan/releases/latest/download/install.sh
+```
+
+```bash
+less install.sh
+```
+
+```bash
+sh install.sh
+```
+
+Set `APL_VERSION=v0.8.0` to install a specific release, `APL_INSTALL_DIR` to install somewhere else, and `APL_REQUIRE_ATTESTATION=1` to refuse a binary whose provenance can't be verified. Run the script again to update.
+
+To install a binary by hand instead, download `apl-<os>-<arch>` from a release and verify it:
+
+```bash
+gh attestation verify apl-darwin-arm64 --repo ghmeier/agent-plan
 ```
 
 ## Why?
@@ -184,31 +220,25 @@ bun run lint:fix    # auto-fix lint and formatting issues
 bun run src/index.ts --help
 ```
 
-### Install / Build
+Development uses Bun, but the published CLI runs on Node: `src/` may only use `node:` modules, which lint enforces.
 
-Install the latest release globally with Bun, which puts `apl` on `PATH` (in `~/.bun/bin`). Run the same command to update:
+### Build
 
 ```bash
-bun i -g @ghmeier/agent-plan@latest
-apl --version
+bun run build          # bundles dist/apl.js, the Node CLI npm publishes
+bun run test:dist      # builds, then runs the tests against dist/apl.js under Node
+bun run build:binary   # compiles a standalone dist/apl for the current platform
 ```
 
-For local development, link the CLI globally from a clone instead:
+For local development, link the CLI globally from a clone:
 
 ```bash
 bun install && bun link
 apl --help
 ```
 
-To produce a standalone binary that runs without Bun installed:
+### Releasing
 
-```bash
-bun run build          # compiles dist/apl for the current platform
-./dist/apl --help
-```
+Bump `version` in `package.json`, commit, and push a matching `v*` tag. `.github/workflows/publish.yml` then runs CI, builds the npm bundle and the standalone binaries, attests the binaries and `install.sh`, creates a GitHub release with them and `SHA256SUMS`, and publishes to npm with provenance.
 
-To cross-compile binaries for macOS (arm64, x64) and Linux (x64) in one step:
-
-```bash
-bun run build:all      # writes dist/apl-darwin-arm64, dist/apl-darwin-x64, dist/apl-linux-x64
-```
+npm publishing uses [trusted publishing](https://docs.npmjs.com/trusted-publishers), so the repo stores no npm token. It needs a one-time setup on npmjs.com: in the package's settings, add a trusted publisher for GitHub Actions with repository `ghmeier/agent-plan`, workflow `publish.yml`, and environment `release`.

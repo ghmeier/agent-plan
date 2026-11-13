@@ -4,6 +4,7 @@ import { readConfig } from "../lib/config";
 import { readDocTypes } from "../lib/doc-types";
 import { AgentPlanError } from "../lib/errors";
 import { parseFrontmatter } from "../lib/frontmatter";
+import { readStdin, readTextIfExists } from "../lib/fs";
 import { branchExists } from "../lib/git";
 import {
   currentBranch,
@@ -80,10 +81,10 @@ async function printLinkedDocs(): Promise<void> {
 
   const lines: string[] = [];
   for (const doc of link?.docs ?? []) {
-    const file = Bun.file(join(storeDir, doc));
+    const content = await readTextIfExists(join(storeDir, doc));
     // A doc can be deleted after it was linked.
-    if (!(await file.exists())) continue;
-    const { title } = parseFrontmatter(await file.text()).meta;
+    if (content === null) continue;
+    const { title } = parseFrontmatter(content).meta;
     lines.push(`- ${doc}${title ? `: ${title}` : ""}`);
   }
   if (lines.length === 0) return;
@@ -118,7 +119,7 @@ async function stop(): Promise<void> {
  */
 async function docTouched(): Promise<void> {
   try {
-    const input = JSON.parse(await Bun.stdin.text()) as {
+    const input = JSON.parse(await readStdin()) as {
       cwd?: unknown;
       tool_input?: { file_path?: unknown };
     };

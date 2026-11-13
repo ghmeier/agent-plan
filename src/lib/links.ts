@@ -1,6 +1,7 @@
 import path, { join } from "node:path";
 import type { PlanConfig } from "../types";
 import { AgentPlanError, FileNotFoundError } from "./errors";
+import { fileExists } from "./fs";
 import { branchExists, execGit, runGit, SKIP_CODE_HOOKS } from "./git";
 import { realpathSafe, STORE_LINK_NAME } from "./paths";
 import { isDocPath } from "./plan-files";
@@ -90,7 +91,7 @@ export async function resolveDocPath(storeDir: string, input: string): Promise<s
   const relative = input.startsWith(linkPrefix) ? input.slice(linkPrefix.length) : input;
 
   for (const candidate of [relative, `${relative}.md`]) {
-    if (isDocPath(candidate) && (await Bun.file(join(storeDir, candidate)).exists())) {
+    if (isDocPath(candidate) && (await fileExists(join(storeDir, candidate)))) {
       return candidate;
     }
   }
@@ -322,7 +323,7 @@ export async function recordLinks(repoRoot: string, storeDir: string): Promise<n
 
     const docs: string[] = [];
     for (const doc of linkedDocs) {
-      if (await Bun.file(join(storeDir, doc)).exists()) docs.push(doc);
+      if (await fileExists(join(storeDir, doc))) docs.push(doc);
     }
     if (docs.length === 0) continue;
 

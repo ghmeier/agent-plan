@@ -1,7 +1,9 @@
+import { stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { stampTimestamps } from "../lib/frontmatter";
+import { readTextIfExists } from "../lib/fs";
 import { execGit, runGit, SKIP_CODE_HOOKS } from "../lib/git";
 import { recordLinks } from "../lib/links";
 import { withStoreLock } from "../lib/lock";
@@ -23,7 +25,8 @@ async function unstageLargeFiles(storeDir: string): Promise<void> {
   );
   const large: string[] = [];
   for (const relPath of stdout.split("\0").filter(Boolean)) {
-    if (Bun.file(join(storeDir, relPath)).size > MAX_COMMITTED_FILE_BYTES) large.push(relPath);
+    const size = (await stat(join(storeDir, relPath)).catch(() => null))?.size ?? 0;
+    if (size > MAX_COMMITTED_FILE_BYTES) large.push(relPath);
   }
   if (large.length === 0) return;
 
@@ -53,13 +56,12 @@ async function stageAndStamp(storeDir: string): Promise<boolean> {
 
   for (const relPath of stagedPaths) {
     const fullPath = join(storeDir, relPath);
-    const file = Bun.file(fullPath);
-    if (!(await file.exists())) continue;
+    const raw = await readTextIfExists(fullPath);
+    if (raw === null) continue;
 
-    const raw = await file.text();
     const stamped = stampTimestamps(raw);
     if (stamped !== raw) {
-      await Bun.write(fullPath, stamped);
+      await writeFile(fullPath, stamped);
       toRestage.push(relPath);
     }
   }

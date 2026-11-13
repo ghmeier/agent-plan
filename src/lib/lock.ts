@@ -1,5 +1,6 @@
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { AgentPlanError } from "./errors";
 import { getGitCommonDir } from "./paths";
 
@@ -31,7 +32,7 @@ async function acquire(lockDir: string): Promise<void> {
   while (true) {
     try {
       await mkdir(lockDir);
-      await Bun.write(path.join(lockDir, "pid"), String(process.pid));
+      await writeFile(path.join(lockDir, "pid"), String(process.pid));
       return;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
@@ -45,15 +46,13 @@ async function acquire(lockDir: string): Promise<void> {
         `Another apl command has held ${lockDir} for over ${WAIT_TIMEOUT_MS / 1000}s. If no apl process is running, delete that directory and try again.`,
       );
     }
-    await Bun.sleep(POLL_INTERVAL_MS);
+    await sleep(POLL_INTERVAL_MS);
   }
 }
 
 async function holderIsGone(lockDir: string): Promise<boolean> {
   const pid = Number.parseInt(
-    await Bun.file(path.join(lockDir, "pid"))
-      .text()
-      .catch(() => ""),
+    await readFile(path.join(lockDir, "pid"), "utf8").catch(() => ""),
     10,
   );
   if (Number.isNaN(pid)) {

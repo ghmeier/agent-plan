@@ -2,6 +2,7 @@ import path from "node:path";
 import { stringify as stringifyYaml } from "yaml";
 import { AgentPlanError } from "./errors";
 import type { PlanMeta } from "./frontmatter";
+import { readTextIfExists } from "./fs";
 import { warn } from "./output";
 
 export interface DocType {
@@ -93,9 +94,9 @@ function parseType(name: string, raw: unknown, configPath: string): DocType {
  */
 export async function readDocTypes(storeDir: string): Promise<DocType[]> {
   const configPath = path.join(storeDir, STORE_CONFIG_FILE);
-  const file = Bun.file(configPath);
-  if (!(await file.exists())) return BUILTIN_TYPES;
-  return parseStoreConfig(await file.text(), configPath);
+  const text = await readTextIfExists(configPath);
+  if (text === null) return BUILTIN_TYPES;
+  return parseStoreConfig(text, configPath);
 }
 
 export function parseStoreConfig(text: string, configPath: string): DocType[] {
@@ -168,8 +169,8 @@ export async function resolveTemplate(
   storeDir: string,
   typeName: string,
 ): Promise<{ text: string; source: TemplateSource }> {
-  const custom = Bun.file(path.join(storeDir, TEMPLATES_DIR, `${typeName}.md`));
-  if (await custom.exists()) return { text: await custom.text(), source: "custom" };
+  const custom = await readTextIfExists(path.join(storeDir, TEMPLATES_DIR, `${typeName}.md`));
+  if (custom !== null) return { text: custom, source: "custom" };
   const source = typeName in TEMPLATE_SECTIONS ? "builtin" : "default";
   return { text: builtinTemplate(typeName), source };
 }

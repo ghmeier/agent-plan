@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+
 export interface GitResult {
   exitCode: number;
   stdout: string;
@@ -20,19 +22,24 @@ export const SKIP_CODE_HOOKS = "--no-verify";
 
 /** Runs git in `cwd` and returns its output without throwing on a non-zero exit. */
 export async function runGit(args: string[], cwd: string): Promise<GitResult> {
-  const proc = Bun.spawn(["git", ...args], {
+  const proc = spawn("git", args, {
     cwd,
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
+    stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, [INTERNAL_ENV_VAR]: "1" },
   });
 
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
+  let stdout = "";
+  let stderr = "";
+  proc.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+  proc.stderr.setEncoding("utf8").on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    proc.on("error", reject);
+    proc.on("close", (code) => resolve(code ?? 1));
+  });
 
   return { exitCode, stdout, stderr };
 }

@@ -13,6 +13,7 @@ import {
 import path from "node:path";
 import type { PlanConfig } from "../types";
 import { AgentPlanError, NotInitializedError, StorePathOccupiedError } from "./errors";
+import { readText, readTextIfExists } from "./fs";
 import { branchExists, execGit, gitPath, runGit } from "./git";
 import { warn } from "./output";
 import { getGitCommonDir, getStoreDir, getStoreLink, realpathSafe, STORE_LINK_NAME } from "./paths";
@@ -173,7 +174,7 @@ async function assertNoConflicts(
   for (const file of files) {
     const stored = await readStored(file);
     if (stored === null) continue;
-    if (stored !== (await Bun.file(path.join(strayDir, file)).text())) conflicts.push(file);
+    if (stored !== (await readText(path.join(strayDir, file)))) conflicts.push(file);
   }
 
   if (conflicts.length > 0) {
@@ -198,10 +199,7 @@ async function adoptStrayDirectory(linkPath: string, storeDir: string): Promise<
   }
 
   const files = await listFilesRecursive(linkPath);
-  await assertNoConflicts(linkPath, files, async (file) => {
-    const existing = Bun.file(path.join(storeDir, file));
-    return (await existing.exists()) ? existing.text() : null;
-  });
+  await assertNoConflicts(linkPath, files, (file) => readTextIfExists(path.join(storeDir, file)));
 
   await cp(linkPath, storeDir, { recursive: true, force: true });
   await rm(linkPath, { recursive: true });
