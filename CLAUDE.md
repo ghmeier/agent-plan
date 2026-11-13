@@ -15,7 +15,7 @@ bun run test:dist        # build dist/apl.js and run the tests against it under 
 
 Run all three (test, typecheck, lint) before calling work done.
 
-Releases are published to npm as `@ghmeier/agent-plan`, and as standalone binaries on a GitHub release, by `.github/workflows/publish.yml` when a `v*` tag is pushed; see README "Releasing". The npm package is `dist/apl.js`, a single Node bundle built by `scripts/build.ts` with no runtime dependencies, so every package in `package.json` is a devDependency. `install.sh` installs a release binary; keep it POSIX `sh`. CI runs on Linux, where git versions can differ from local macOS, so be careful with git behavior that varies across versions.
+Releases are published to npm as `@ghmeier/agent-plan`, and as standalone binaries on a GitHub release, by `.github/workflows/publish.yml` when a `v*` tag is pushed; see README "Releasing". The npm package is `dist/apl.js`, a single Node bundle built by `scripts/build.ts` with no runtime dependencies, so every package in `package.json` is a devDependency. `install.sh` installs a release binary; keep it POSIX `sh`. Workflow actions are locked in `.github/workflows/actions.lock` by [`gh actions-lock`](https://github.com/github/gh-actions-lock); rerun it after changing any `uses:`, and the `verify-lockfile` workflow fails CI if you don't. CI runs on Linux, where git versions can differ from local macOS, so be careful with git behavior that varies across versions.
 
 ## Layout
 
