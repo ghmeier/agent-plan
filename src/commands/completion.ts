@@ -20,7 +20,7 @@ _apl_completions() {
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
   fi
 
-  local subcommands="init new add commit sync pull status log show ls search diff types link unlink links completion"
+  local subcommands="init new add commit sync pull status log show ls search diff types link unlink links set completion"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=($(compgen -W "$subcommands" -- "$cur"))
@@ -85,6 +85,18 @@ _apl_completions() {
         *)
           if [[ "$cur" == -* ]]; then
             COMPREPLY=($(compgen -W "--branch --edits --json" -- "$cur"))
+          else
+            COMPREPLY=($(compgen -W "$(apl __complete files "$cur" 2>/dev/null)" -- "$cur"))
+          fi
+          ;;
+      esac
+      ;;
+    set)
+      case "$prev" in
+        --status) COMPREPLY=($(compgen -W "$(apl __complete statuses 2>/dev/null)" -- "$cur")) ;;
+        *)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--status" -- "$cur"))
           else
             COMPREPLY=($(compgen -W "$(apl __complete files "$cur" 2>/dev/null)" -- "$cur"))
           fi
@@ -186,6 +198,7 @@ _apl() {
         'link:Link a doc to a code branch'
         'unlink:Remove a link between a doc and a code branch'
         'links:List the code branches linked to docs'
+        'set:Set fields in a doc'\\''s front matter'
         'completion:Print shell completion script'
       )
       _describe 'subcommand' subcommands
@@ -235,6 +248,11 @@ _apl() {
             '--edits[Show edits made to the doc since it was linked to the branch]' \\
             '--json[Output in JSON format]' \\
             '::doc:($(apl __complete files 2>/dev/null))'
+          ;;
+        set)
+          _arguments \\
+            '--status[Status to set]:status:($(apl __complete statuses 2>/dev/null))' \\
+            ':doc:($(apl __complete files 2>/dev/null))'
           ;;
         search)
           _arguments \\
@@ -315,6 +333,7 @@ complete -c apl -n '__fish_use_subcommand' -a types      -d 'List doc types'
 complete -c apl -n '__fish_use_subcommand' -a link       -d 'Link a doc to a code branch'
 complete -c apl -n '__fish_use_subcommand' -a unlink     -d 'Remove a link between a doc and a code branch'
 complete -c apl -n '__fish_use_subcommand' -a links      -d 'List the code branches linked to docs'
+complete -c apl -n '__fish_use_subcommand' -a set        -d "Set fields in a doc's front matter"
 complete -c apl -n '__fish_use_subcommand' -a completion -d 'Print shell completion script'
 
 # show
@@ -359,6 +378,12 @@ complete -c apl -n '__fish_seen_subcommand_from links' -l json  -d 'Output in JS
 complete -c apl -n '__fish_seen_subcommand_from link unlink links' -a '(apl __complete files 2>/dev/null)'
 complete -c apl -n '__fish_seen_subcommand_from show ls link unlink links' -n '__fish_prev_arg_in --branch' \\
   -a '(apl __complete branches 2>/dev/null)'
+
+# set
+complete -c apl -n '__fish_seen_subcommand_from set' -l status -r -d 'Status to set'
+complete -c apl -n '__fish_seen_subcommand_from set' -n '__fish_prev_arg_in --status' \\
+  -a '(apl __complete statuses 2>/dev/null)'
+complete -c apl -n '__fish_seen_subcommand_from set' -a '(apl __complete files 2>/dev/null)'
 
 # new
 complete -c apl -n '__fish_seen_subcommand_from new' -l title -r -d 'Title for the doc'

@@ -10,6 +10,7 @@ import {
   planLogMessages,
   type Repo,
   run,
+  writeStoreConfig,
 } from "./harness";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -339,5 +340,122 @@ describe("frontmatter timestamps", () => {
     expect(edited.updated).toMatch(ISO_DATE);
     expect(edited.updated).not.toBe("2020-01-01");
     expect((await showMeta(repo, "untouched.md")).updated).toBe("2020-01-01");
+  });
+});
+
+describe("apl set --status", () => {
+  const STALE_DOC = [
+    "---",
+    "title: Billing",
+    "# kept as the author wrote it",
+    "status: draft",
+    "owner: [alice,  bob]",
+    "created: 2020-01-01",
+    "updated: 2020-01-02",
+    "---",
+    "# Billing",
+    "",
+    "Body   with  odd spacing.",
+    "",
+  ].join("\n");
+
+  /** Puts `content` at `docPath` in the store without going through `apl add`, so dates stay as written. */
+  async function writeStoreDoc(repo: Repo, docPath: string, content: string): Promise<string> {
+    const file = join(repo.storeDir, docPath);
+    await Bun.write(file, content);
+    return file;
+  }
+
+  test("set changes the status and the updated date and leaves the rest of the doc as written", async () => {
+    await using repo = await createInitializedRepo();
+    const file = await writeStoreDoc(repo, "plan/billing.md", STALE_DOC);
+
+    const result = await apl(repo.dir, ["set", "plan/billing", "--status", "active"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Set plan/billing.md status to active");
+    const raw = await Bun.file(file).text();
+    expect(raw).toBe(
+      STALE_DOC.replace("status: draft", "status: active").replace(
+        "updated: 2020-01-02",
+        `updated: ${new Date().toISOString().slice(0, 10)}`,
+      ),
+    );
+  });
+
+  test("set succeeds and still stamps when the doc already has that status", async () => {
+    await using repo = await createInitializedRepo();
+    await writeStoreDoc(repo, "plan/billing.md", STALE_DOC);
+
+    const result = await apl(repo.dir, ["set", ".apl/plan/billing.md", "--status", "draft"]);
+
+    expect(result.exitCode).toBe(0);
+    const meta = await showMeta(repo, "plan/billing.md");
+    expect(meta.status).toBe("draft");
+    expect(meta.updated).toMatch(ISO_DATE);
+    expect(meta.updated).not.toBe("2020-01-02");
+  });
+
+  test("set rejects a status the doc's type does not list and leaves the file unchanged", async () => {
+    await using repo = await createInitializedRepo();
+    const file = await writeStoreDoc(repo, "plan/billing.md", STALE_DOC);
+
+    const result = await apl(repo.dir, ["set", "plan/billing.md", "--status", "shipped"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain(
+      '"shipped" is not a status of plan docs (plan/billing.md). Use one of: draft, active, completed, archived.',
+    );
+    expect(await Bun.file(file).text()).toBe(STALE_DOC);
+  });
+
+  test("set takes the statuses of a custom type from the committed store config", async () => {
+    await using repo = await createInitializedRepo();
+    await writeStoreConfig(repo, {
+      types: { rfc: { statuses: ["proposed", "accepted"] } },
+    });
+    await writeStoreDoc(
+      repo,
+      "rfc/cache.md",
+      STALE_DOC.replace("status: draft", "status: proposed"),
+    );
+
+    const accepted = await apl(repo.dir, ["set", "rfc/cache", "--status", "accepted"]);
+    const builtin = await apl(repo.dir, ["set", "rfc/cache", "--status", "active"]);
+
+    expect(accepted.exitCode).toBe(0);
+    expect((await showMeta(repo, "rfc/cache.md")).status).toBe("accepted");
+    expect(builtin.exitCode).not.toBe(0);
+    expect(builtin.stderr).toContain("Use one of: proposed, accepted.");
+  });
+
+  test("set rejects a doc without front matter and leaves it unchanged", async () => {
+    await using repo = await createInitializedRepo();
+    const file = await writeStoreDoc(repo, "plan/bare.md", "# Bare\n");
+
+    const result = await apl(repo.dir, ["set", "plan/bare", "--status", "active"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("plan/bare.md has no front matter");
+    expect(await Bun.file(file).text()).toBe("# Bare\n");
+  });
+
+  test("set without a field option says what to pass", async () => {
+    await using repo = await createInitializedRepo();
+    await writeStoreDoc(repo, "plan/billing.md", STALE_DOC);
+
+    const result = await apl(repo.dir, ["set", "plan/billing"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("Nothing to set. Pass --status <status>.");
+  });
+
+  test("set fails for a doc that does not exist", async () => {
+    await using repo = await createInitializedRepo();
+
+    const result = await apl(repo.dir, ["set", "plan/missing", "--status", "active"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("plan/missing");
   });
 });
