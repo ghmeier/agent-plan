@@ -62,6 +62,8 @@ Documents can be automatically grouped into folders, filtered, and have custom s
 | `research` | `draft`, `final`, `archived`               |
 | `handoff`  | `open`, `picked-up`, `closed`              |
 
+Change a doc's status with `apl set <doc> --status <status>`. It rejects a status the doc's type doesn't list, and updates the `updated` date. Like any other edit, the change is committed on the next `apl commit` or `apl sync`.
+
 Document types are configurable by creating `config.json` at the root of the docs branch (`.apl` by default). For example:
 
 ```json
@@ -98,7 +100,7 @@ updated: 2026-09-15
 Supported fields:
 
 - **title**: Short display name shown in `apl ls` output
-- **status**: One of the doc type's statuses (see Document Types).
+- **status**: One of the doc type's statuses (see Document Types). Change it with `apl set <doc> --status <status>`.
 - **tags**: Array of free-form strings for categorization
 - **created**: ISO date, auto-set on first `apl add`
 - **updated**: ISO date, auto-set on every `apl add` and `apl commit`
@@ -131,6 +133,15 @@ Links are stored in two ways:
 
 - **In the repo's git config**, as `branch.<name>.apl-doc`.
 - **On the agent-plan branch**, as an empty commit with commented `Linked-Doc`, `Code-Branch`, and `Code-Commit`.
+
+## Setting Fields
+
+```bash
+# Mark a plan as completed.
+apl set plan/billing --status completed
+```
+
+`apl set <doc>` edits only the front matter lines it changes (and the `updated` date), and leaves the rest of the doc as written. `--status` is the only field it takes so far.
 
 ## Agent Usage
 

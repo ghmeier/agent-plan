@@ -247,6 +247,7 @@ describe.skipIf(!HAS_BASH)("bash completion", () => {
         "link",
         "unlink",
         "links",
+        "set",
         "completion",
       ],
     },
@@ -284,6 +285,21 @@ describe.skipIf(!HAS_BASH)("bash completion", () => {
     { line: ["apl", "unlink", "--"], expected: ["--branch"] },
     { line: ["apl", "links", "--"], expected: ["--branch", "--edits", "--json"] },
     { line: ["apl", "links", ""], expected: ["alpha.md", "beta.md"] },
+    { line: ["apl", "set", "--"], expected: ["--status"] },
+    { line: ["apl", "set", ""], expected: ["alpha.md", "beta.md"] },
+    {
+      line: ["apl", "set", "x", "--status", ""],
+      expected: [
+        "draft",
+        "active",
+        "completed",
+        "archived",
+        "final",
+        "open",
+        "picked-up",
+        "closed",
+      ],
+    },
     { line: ["apl", "log", "--"], expected: ["--links", "--json"] },
   ])("completes $line", async ({ line, expected }) => {
     await using repo = await createRepoWithTaggedPlans();
