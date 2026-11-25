@@ -107,13 +107,14 @@ Supported fields:
 
 ## Linking Docs to Branches
 
-For easier cross-referencing and integration with other tooling, docs can be manually (or automagically) linked to branches. That allows you to later track which commits related to a given plan.
+For easier cross-referencing and integration with other tooling, docs can be linked to the branches that implement them. That allows you to later track which commits related to a given plan.
 
 ```bash
 # Link plan/billing to the current branch.
 apl link plan/billing
 
-# Link plan/billing to a specific branch.
+# Link plan/billing to a specific branch. It doesn't have to exist yet:
+# its link is recorded once it's created.
 apl link plan/billing --branch feature/billing
 
 # List all links.
@@ -128,6 +129,8 @@ apl links --branch feature/billing
 # Remove a link.
 apl unlink plan/billing --branch feature/billing
 ```
+
+A doc is also linked to every local branch it names, by the branch's full name or by the ticket key the name starts with (`sc-123` for `sc-123-billing-retries`), so a plan that lists the branches for its work needs no `apl link` at all. `apl unlink` removes such a link for good.
 
 Links are stored in two ways:
 

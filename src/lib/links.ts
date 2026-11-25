@@ -1,17 +1,20 @@
 import path, { join } from "node:path";
 import type { PlanConfig } from "../types";
+import { readConfig } from "./config";
 import { AgentPlanError, FileNotFoundError } from "./errors";
-import { fileExists } from "./fs";
+import { fileExists, readTextIfExists } from "./fs";
 import { branchExists, execGit, runGit, SKIP_CODE_HOOKS } from "./git";
 import { realpathSafe, STORE_LINK_NAME } from "./paths";
-import { isDocPath } from "./plan-files";
+import { isDocPath, listMarkdownFiles } from "./plan-files";
 
 /**
  * A link between a code branch and the docs it implements has two parts.
  *
  * The working link is git config in the code repo, `branch.<name>.apl-doc`,
  * with one value per doc. Every checkout of a clone shares it and git drops
- * it when the branch is deleted. It tells apl which branches to watch.
+ * it when the branch is deleted. It tells apl which branches to watch, and
+ * can name a branch that doesn't exist yet: git keeps the key when the branch
+ * is created, so a plan can name its branches before any work starts.
  *
  * The record is an empty commit on the docs branch whose trailers name the
  * branch, its tip, and the docs. It is shared with teammates and outlives the
@@ -83,12 +86,23 @@ export async function assertWorkBranch(
 }
 
 /**
- * Maps what a user typed for a doc to its path in the store. Accepts a path
- * with or without `.apl/` in front and with or without `.md`.
+ * The store-relative form of what a user typed for a doc: a path in the store,
+ * a path with `.apl/` in front, or a path through any checkout's `.apl` link,
+ * absolute or relative to the working directory.
+ */
+async function storeRelativeInput(storeDir: string, input: string): Promise<string> {
+  const addressed = await storeRelativePath(storeDir, path.resolve(input));
+  if (addressed) return addressed;
+  const linkPrefix = `${STORE_LINK_NAME}/`;
+  return input.startsWith(linkPrefix) ? input.slice(linkPrefix.length) : input;
+}
+
+/**
+ * Maps what a user typed for a doc to its path in the store. Accepts any path
+ * `storeRelativeInput` does, with or without `.md`.
  */
 export async function resolveDocPath(storeDir: string, input: string): Promise<string> {
-  const linkPrefix = `${STORE_LINK_NAME}/`;
-  const relative = input.startsWith(linkPrefix) ? input.slice(linkPrefix.length) : input;
+  const relative = await storeRelativeInput(storeDir, input);
 
   for (const candidate of [relative, `${relative}.md`]) {
     if (isDocPath(candidate) && (await fileExists(join(storeDir, candidate)))) {
@@ -137,31 +151,8 @@ export async function addWorkingLink(
 }
 
 /**
- * Links `doc` to the branch checked out at `repoRoot` because the doc was just
- * read or edited from there. Only the working link is written: no docs-branch
- * commit and no store lock, so the next commit or sync records it. Linking is
- * best-effort, so this never throws and the read or edit that triggered it is
- * never disturbed.
- */
-export async function linkOnTouch(
-  repoRoot: string,
-  config: PlanConfig,
-  doc: string,
-): Promise<void> {
-  try {
-    if (!isDocPath(doc)) return;
-    const branch = await currentBranch(repoRoot);
-    if (!branch || branch === config.branch) return;
-    if (branch === (await defaultBranch(repoRoot, config))) return;
-    await addWorkingLink(repoRoot, branch, doc);
-  } catch {
-    // Best-effort: a failed link must not fail a read.
-  }
-}
-
-/**
  * The store-relative path of `filePath` when it is a file in the store, or
- * null. `filePath` is the path as an agent addressed it, so it may go through
+ * null. `filePath` is the path as it was addressed, so it may go through
  * any checkout's `.apl` link or the store's real path. Both sides are
  * compared by their real paths too, since macOS paths can differ only by a
  * symlinked prefix such as /var and /private/var.
@@ -222,12 +213,24 @@ const LOG_FIELD_SEP = "\x1f";
 const LOG_RECORD_SEP = "\x1e";
 const TRAILER_LINE = /^([A-Za-z-]+): (.*)$/;
 
+interface LinkHistory {
+  /** One per branch name, oldest first, including links whose docs were all unlinked. */
+  links: BranchLink[];
+  /** For each branch, the docs whose latest record is an unlink. */
+  unlinked: Map<string, Set<string>>;
+}
+
 /**
  * Every link recorded on the docs branch, one per branch name, oldest first.
  * Nothing records that a branch was merged, so a name that is reused later
  * continues its old link. Links whose docs were all unlinked are left out.
  */
 export async function readRecordedLinks(storeDir: string): Promise<BranchLink[]> {
+  const { links } = await readLinkHistory(storeDir);
+  return links.filter((link) => link.docs.length > 0);
+}
+
+async function readLinkHistory(storeDir: string): Promise<LinkHistory> {
   // The message is parsed here rather than with git's %(trailers) format,
   // whose options differ between git versions.
   const output = await execGit(
@@ -242,6 +245,7 @@ export async function readRecordedLinks(storeDir: string): Promise<BranchLink[]>
 
   const links: BranchLink[] = [];
   const latest = new Map<string, BranchLink>();
+  const unlinkedByBranch = new Map<string, Set<string>>();
 
   for (const record of output.split(LOG_RECORD_SEP)) {
     const [date, message] = record.trim().split(LOG_FIELD_SEP);
@@ -272,17 +276,21 @@ export async function readRecordedLinks(storeDir: string): Promise<BranchLink[]>
       latest.set(branch, link);
     }
 
+    const branchUnlinked = unlinkedByBranch.get(branch) ?? new Set<string>();
+    unlinkedByBranch.set(branch, branchUnlinked);
     for (const doc of allValues(TRAILER.linked)) {
       if (!link.docs.includes(doc)) link.docs.push(doc);
+      branchUnlinked.delete(doc);
     }
     const unlinked = allValues(TRAILER.unlinked);
     link.docs = link.docs.filter((doc) => !unlinked.includes(doc));
+    for (const doc of unlinked) branchUnlinked.add(doc);
 
     if (commit !== undefined) link.commit = commit;
     link.updatedAt = date;
   }
 
-  return links.filter((link) => link.docs.length > 0);
+  return { links, unlinked: unlinkedByBranch };
 }
 
 function latestLinkByBranch(links: BranchLink[]): Map<string, BranchLink> {
@@ -304,26 +312,96 @@ function describeDocs(docs: string[]): string {
 }
 
 /**
+ * The ticket key a branch name starts with, such as `sc-123` in
+ * `sc-123-fix-login` or `ENG-42` in `ENG-42/retry`, or null. Docs often
+ * name the ticket rather than the branch.
+ */
+function ticketKey(branch: string): string | null {
+  return /^([A-Za-z]+-\d+)(?:[-_/]|$)/.exec(branch)?.[1] ?? null;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * A pattern for `term` as a whole token in prose. A branch name is not
+ * matched inside a longer name or a path (`fix-login` in
+ * `fix-login-page`), but a ticket key can be followed by the rest of a
+ * branch name, since any branch for the ticket is for the same work.
+ */
+function mentionPattern(term: string, isTicketKey: boolean): RegExp {
+  const after = isTicketKey ? "(?![\\w])" : "(?![\\w/-])";
+  return new RegExp(`(?<![\\w./-])${escapeRegExp(term)}${after}`);
+}
+
+/**
+ * The docs that name each branch, by its full name or by its ticket key.
+ * A plan that names the branches that implement it is linked to them by
+ * that alone, so neither an orchestrator nor its subagents run anything to
+ * link. Single-word names such as `staging` are skipped, since they are
+ * ordinary words in prose.
+ */
+async function findMentionedLinks(
+  storeDir: string,
+  branches: string[],
+): Promise<Map<string, string[]>> {
+  const terms = branches
+    .filter((branch) => /[-/_]/.test(branch))
+    .flatMap((branch) => {
+      const key = ticketKey(branch);
+      const byName = { branch, term: branch, pattern: mentionPattern(branch, false) };
+      if (!key || key === branch) return [byName];
+      return [byName, { branch, term: key, pattern: mentionPattern(key, true) }];
+    });
+
+  const mentioned = new Map<string, string[]>();
+  if (terms.length === 0) return mentioned;
+
+  for (const doc of await listMarkdownFiles(storeDir)) {
+    const content = await readTextIfExists(join(storeDir, doc));
+    if (content === null) continue;
+    for (const { branch, term, pattern } of terms) {
+      if (!content.includes(term) || !pattern.test(content)) continue;
+      const docs = mentioned.get(branch) ?? [];
+      if (!docs.includes(doc)) docs.push(doc);
+      mentioned.set(branch, docs);
+    }
+  }
+  return mentioned;
+}
+
+/**
  * Records, on the docs branch, each linked branch that is new or whose tip
- * has moved since it was last recorded. Returns how many branches were
- * recorded. Callers hold the store lock and have committed pending doc edits,
- * so the commits this makes are empty.
+ * has moved since it was last recorded. A branch is linked to the docs that
+ * name it and to the docs linked to it with `apl link`. A doc that was
+ * unlinked with `apl unlink` isn't linked again for naming the branch.
+ * Returns how many branches were recorded. Callers hold the store lock and
+ * have committed pending doc edits, so the commits this makes are empty.
  */
 export async function recordLinks(repoRoot: string, storeDir: string): Promise<number> {
-  const working = await readWorkingLinks(repoRoot);
-  if (working.size === 0) return 0;
-
+  const config = await readConfig(repoRoot);
   const tips = await localBranchTips(repoRoot);
-  const recorded = latestLinkByBranch(await readRecordedLinks(storeDir));
+  const ignored = new Set([config.branch, await defaultBranch(repoRoot, config)]);
+  const workBranches = [...tips.keys()].filter((branch) => !ignored.has(branch));
+
+  const working = await readWorkingLinks(repoRoot);
+  const mentioned = await findMentionedLinks(storeDir, workBranches);
+  const history = await readLinkHistory(storeDir);
+  const recorded = latestLinkByBranch(history.links);
   let count = 0;
 
-  for (const [branch, linkedDocs] of working) {
+  for (const branch of workBranches) {
     const tip = tips.get(branch);
     if (!tip) continue;
 
     const docs: string[] = [];
-    for (const doc of linkedDocs) {
+    for (const doc of working.get(branch) ?? []) {
       if (await fileExists(join(storeDir, doc))) docs.push(doc);
+    }
+    const unlinked = history.unlinked.get(branch);
+    for (const doc of mentioned.get(branch) ?? []) {
+      if (!docs.includes(doc) && !unlinked?.has(doc)) docs.push(doc);
     }
     if (docs.length === 0) continue;
 
@@ -386,8 +464,7 @@ export async function docPathForLookup(storeDir: string, input: string): Promise
     return await resolveDocPath(storeDir, input);
   } catch (err) {
     if (!(err instanceof FileNotFoundError)) throw err;
-    const linkPrefix = `${STORE_LINK_NAME}/`;
-    return input.startsWith(linkPrefix) ? input.slice(linkPrefix.length) : input;
+    return storeRelativeInput(storeDir, input);
   }
 }
 

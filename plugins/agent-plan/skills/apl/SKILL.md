@@ -18,11 +18,11 @@ Plans, research, and handoffs live in `.apl/`, a directory shared by every check
 
 ## Linked branches
 
-Reading or editing a doc from a work branch links the doc to that branch automatically, so there is nothing to maintain. Read plans with `apl show`, which always attributes the read to the right branch.
+A link records which code branches implement a doc. A doc is linked to every local branch it names, by the branch's full name (`feature/billing-retries`) or by the ticket key the name starts with (`sc-123` for `sc-123-billing-retries`). So when a plan says which branch each piece of work goes on, its links follow with nothing else to run, including for branches a subagent creates later. Write the full branch name in the plan wherever you decide one.
 
+- For a branch the doc doesn't name, run `apl link <doc> --branch <name>`. The branch doesn't have to exist yet.
 - `apl show --branch` prints every doc linked to the branch you are on. Start there when you pick up work on a branch. `apl ls --branch <name>` lists them without printing them.
 - `apl links` lists every link. `apl links <doc>` lists the branches that implement a doc, and `apl links --branch` lists the docs a branch is for.
-- When an implementer will not open the plan itself, for example an orchestrator that pastes a section into a subagent's prompt, run `apl link <doc> --branch <name>`.
 - `apl unlink <doc> --branch <name>` removes a link that is wrong.
 
 ## Create a doc

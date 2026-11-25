@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import {
   addOrigin,
   addPlan,
@@ -69,6 +70,21 @@ describe("apl link", () => {
   );
 
   test(
+    "link accepts an absolute path to the doc",
+    async () => {
+      await using repo = await createRepoWithPlan();
+      await startWorkBranch(repo, "feature/billing");
+
+      const result = await apl(repo.dir, ["link", join(repo.storeDir, PLAN)]);
+
+      expect(result.exitCode).toBe(0);
+      const [link] = await readLinks(repo);
+      expect(link?.docs).toEqual([PLAN]);
+    },
+    LINK_TEST_TIMEOUT_MS,
+  );
+
+  test(
     "link --branch links a branch other than the one checked out",
     async () => {
       await using repo = await createRepoWithPlan();
@@ -114,14 +130,48 @@ describe("apl link", () => {
   );
 
   test(
-    "link refuses a branch that does not exist",
+    "link to a branch that does not exist yet records nothing until the branch is created",
     async () => {
       await using repo = await createRepoWithPlan();
 
-      const result = await apl(repo.dir, ["link", PLAN, "--branch", "feature/absent"]);
+      const result = await apl(repo.dir, ["link", PLAN, "--branch", "feature/later"]);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("once the branch is created");
+      expect(await readLinks(repo)).toEqual([]);
+    },
+    LINK_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "link to a branch that does not exist yet is recorded by the first commit after it is created",
+    async () => {
+      await using repo = await createRepoWithPlan();
+      await using worktree = await createSecondaryCheckout(repo);
+      await apl(repo.dir, ["link", PLAN, "--branch", "feature/later"]);
+      await git(worktree.dir, ["checkout", "-b", "feature/later"]);
+      const tip = await commitCode(worktree, "billing.ts");
+
+      await apl(worktree.dir, ["commit"]);
+
+      const [link, ...rest] = await readLinks(repo);
+      expect(rest).toEqual([]);
+      expect(link?.branch).toBe("feature/later");
+      expect(link?.docs).toEqual([PLAN]);
+      expect(link?.commit).toBe(tip);
+    },
+    LINK_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "link refuses a branch name git would not accept",
+    async () => {
+      await using repo = await createRepoWithPlan();
+
+      const result = await apl(repo.dir, ["link", PLAN, "--branch", "feature..bad"]);
 
       expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain("No local branch named 'feature/absent'");
+      expect(result.stderr).toContain("'feature..bad' is not a valid branch name");
     },
     LINK_TEST_TIMEOUT_MS,
   );

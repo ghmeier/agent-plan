@@ -12,7 +12,6 @@ import {
   type BranchLink,
   branchOrCurrent,
   currentLinkOfBranch,
-  linkOnTouch,
   linksOfDoc,
   readRecordedLinks,
 } from "../lib/links";
@@ -165,10 +164,6 @@ export async function showPlan(
   const links = options.json ? await readRecordedLinks(storeDir) : [];
   const { content, json } = await renderDoc(storeDir, planPath, options, links);
   if (json) console.log(JSON.stringify(json));
-
-  // Reading a doc from a work branch links it to that branch. `show` accepts a
-  // path without `.md`, but links are keyed by the real path.
-  await linkOnTouch(repoRoot, config, planPath.endsWith(".md") ? planPath : `${planPath}.md`);
   return content;
 }
 

@@ -1,7 +1,13 @@
 import type { Command } from "commander";
 import { readConfig } from "../lib/config";
 import { AgentPlanError } from "../lib/errors";
-import { branchOrCurrent, docPathForLookup, recordUnlink, removeWorkingLink } from "../lib/links";
+import {
+  branchOrCurrent,
+  docPathForLookup,
+  recordLinks,
+  recordUnlink,
+  removeWorkingLink,
+} from "../lib/links";
 import { withStoreLock } from "../lib/lock";
 import { success } from "../lib/output";
 import { findRepoRoot } from "../lib/paths";
@@ -27,6 +33,9 @@ export async function unlinkDoc(docInput: string, options: UnlinkOptions = {}): 
 
     const removed = await removeWorkingLink(repoRoot, branch, doc);
     await assertNoOperationInProgress(storeDir);
+    // A doc that names the branch is linked to it without a record yet until
+    // the next commit. Recording it first lets the unlink below remove it.
+    await recordLinks(repoRoot, storeDir);
     const recorded = await recordUnlink(storeDir, branch, doc);
 
     if (!removed && !recorded) {
